@@ -79,6 +79,39 @@ const getEntryText = (entry, localName, namespacedName) => {
   return '';
 };
 
+const getEntryAttr = (entry, localName, namespacedName, attrName) => {
+  const localNode = entry.getElementsByTagNameNS('*', localName)[0];
+  if (localNode?.getAttribute(attrName)) return localNode.getAttribute(attrName);
+  const namespacedNode = entry.getElementsByTagName(namespacedName)[0];
+  if (namespacedNode?.getAttribute(attrName)) return namespacedNode.getAttribute(attrName);
+  return '';
+};
+
+const extractYouTubeIdFromUrl = (url) => {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'youtu.be') {
+      return parsed.pathname.replace('/', '').trim();
+    }
+    if (parsed.searchParams.get('v')) {
+      return parsed.searchParams.get('v');
+    }
+    if (parsed.pathname.startsWith('/shorts/')) {
+      return parsed.pathname.replace('/shorts/', '').split('/')[0];
+    }
+  } catch {
+    return '';
+  }
+  return '';
+};
+
+const getVideoThumbnailUrl = (video) => {
+  if (video.thumbnail) return video.thumbnail;
+  const videoId = video.videoId || extractYouTubeIdFromUrl(video.url);
+  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '';
+};
+
 const parseYouTubeFeed = (xmlText) => {
   if (typeof DOMParser === 'undefined') return [];
   const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
@@ -89,6 +122,7 @@ const parseYouTubeFeed = (xmlText) => {
     const title = getEntryText(entry, 'title', 'title');
     const videoId = getEntryText(entry, 'videoId', 'yt:videoId');
     const description = getEntryText(entry, 'description', 'media:description');
+    const thumbnail = getEntryAttr(entry, 'thumbnail', 'media:thumbnail', 'url');
     const altLink = Array.from(entry.getElementsByTagName('link')).find((node) => node.getAttribute('rel') === 'alternate');
     const feedUrl = altLink?.getAttribute('href') ?? '';
     const url = feedUrl || (videoId ? `https://youtu.be/${videoId}` : '');
@@ -97,6 +131,8 @@ const parseYouTubeFeed = (xmlText) => {
       id: videoId || `feed-video-${index}`,
       title: title || 'Latest video',
       description: summarizeVideoDescription(description) || 'Watch the newest upload on YouTube.',
+      videoId,
+      thumbnail,
       url
     };
   }).filter((video) => Boolean(video.url));
@@ -825,8 +861,14 @@ export default function App() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {videos.map((video, idx) => {
                 const safeVideoUrl = safeExternalUrl(video.url, '#');
+                const safeThumbnailUrl = safeExternalUrl(getVideoThumbnailUrl(video));
                 return (
                   <a key={`${video.id}-${idx}`} href={safeVideoUrl} onClick={(e) => safeVideoUrl === '#' && e.preventDefault()} target="_blank" rel="noopener noreferrer" className="bg-black/60 rounded-xl border border-white/10 group hover:border-blue-500/50 transition-all flex flex-col shadow-xl p-6">
+                    {safeThumbnailUrl && (
+                      <div className="mb-4 -mx-1 rounded-lg overflow-hidden border border-white/10 bg-black/30">
+                        <img src={safeThumbnailUrl} alt={video.title} loading="lazy" className="w-full aspect-video object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                      </div>
+                    )}
                     <div className="flex items-start gap-3 mb-4">
                       <Youtube size={24} className="text-red-500 flex-shrink-0 mt-0.5" />
                       <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors text-lg leading-snug">{video.title}</h3>

@@ -259,6 +259,17 @@ export default function App() {
   });
 
   const isOwner = Boolean(user && (AUTHORIZED_ID === "" || user.uid === AUTHORIZED_ID));
+  const isSignedInUser = Boolean(user && !user.isAnonymous);
+  const isWrongOwnerAccount = Boolean(isSignedInUser && AUTHORIZED_ID && user.uid !== AUTHORIZED_ID);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const pendingSection = window.localStorage.getItem('pending-section-after-auth');
+    if (pendingSection) {
+      setActiveSection(pendingSection);
+      window.localStorage.removeItem('pending-section-after-auth');
+    }
+  }, []);
 
   useEffect(() => {
     if (!auth) {
@@ -274,7 +285,12 @@ export default function App() {
     const initAuth = async () => {
       try {
         // Resolve possible result from redirect-based sign-in flow.
-        await getRedirectResult(auth).catch(() => null);
+        const redirectResult = await getRedirectResult(auth).catch(() => null);
+        if (redirectResult?.user) {
+          setUser(redirectResult.user);
+          setIsAuthReady(true);
+          return;
+        }
         if (initialAuthToken) {
           await signInWithCustomToken(auth, initialAuthToken);
         } else if (!auth.currentUser) {
@@ -418,6 +434,9 @@ export default function App() {
     if (!auth) return;
     setIsAuthBusy(true);
     setAuthError('');
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('pending-section-after-auth', 'admin');
+    }
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
@@ -938,24 +957,40 @@ export default function App() {
                   <p className="text-white/70">Checking authentication...</p>
                 ) : (
                   <>
-                    <p className="text-white font-semibold">Sign in with your owner Google account to manage the ToneShift journal.</p>
+                    <p className="text-white font-semibold">
+                      {isWrongOwnerAccount
+                        ? 'You are signed in, but this is not the authorized manager account.'
+                        : 'Sign in with your owner Google account to manage the ToneShift journal.'}
+                    </p>
                     {user && (
                       <div className="text-xs text-white/50 bg-black/40 border border-white/10 rounded-lg px-4 py-3">
                         Current UID: <span className="text-white/80">{user.uid}</span>
                       </div>
                     )}
-                    {user && !user.isAnonymous && AUTHORIZED_ID && user.uid !== AUTHORIZED_ID && (
-                      <p className="text-amber-300 text-sm">This account is signed in, but it is not the authorized manager account.</p>
+                    {isWrongOwnerAccount && (
+                      <p className="text-amber-300 text-sm">Sign out and choose your owner account when prompted.</p>
                     )}
                     {authError && <p className="text-red-300 text-sm">{authError}</p>}
-                    <button
-                      type="button"
-                      onClick={handleOwnerSignIn}
-                      disabled={isAuthBusy}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg active:scale-95 disabled:opacity-50"
-                    >
-                      {isAuthBusy ? 'Signing in...' : 'Sign in with Google'}
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={handleOwnerSignIn}
+                        disabled={isAuthBusy}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg active:scale-95 disabled:opacity-50"
+                      >
+                        {isAuthBusy ? 'Signing in...' : (isWrongOwnerAccount ? 'Choose Different Account' : 'Sign in with Google')}
+                      </button>
+                      {isSignedInUser && (
+                        <button
+                          type="button"
+                          onClick={handleOwnerSignOut}
+                          disabled={isAuthBusy}
+                          className="px-6 py-3 rounded-lg font-medium bg-white/10 border border-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                        >
+                          {isAuthBusy ? 'Signing out...' : 'Sign out'}
+                        </button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

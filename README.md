@@ -45,3 +45,5 @@ For production (GitHub Pages), set these as **Repository Variables** in GitHub:
 3. Enable Formspree spam controls (honeypot/reCAPTCHA, allowed origins).
 4. Rotate any keys already exposed in git history and update repository variables.
 5. Enable branch protection on `main` and require PR review for content-manager code changes.
+
+Detailed walkthrough: see `SECURITY_SETUP.md`.

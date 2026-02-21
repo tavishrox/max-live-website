@@ -1,0 +1,17 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isOwner() {
+      return request.auth != null && request.auth.uid == "05378337030731377140";
+    }
+
+    match /artifacts/{appId}/blogImages/{filePath=**} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

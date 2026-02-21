@@ -4,7 +4,10 @@ import {
   getAuth, 
   signInAnonymously, 
   signInWithCustomToken, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -15,6 +18,12 @@ import {
   onSnapshot,
   updateDoc
 } from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 import { 
   Mic2, 
   Youtube, 
@@ -189,6 +198,16 @@ const PERMANENT_VIDEOS = [
 ];
 
 // --- FIREBASE SETUP ---
+const getEnvFirebaseConfig = () => ({
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+});
+
 const parseInjectedFirebaseConfig = () => {
   const rawConfig = typeof globalThis !== 'undefined' ? globalThis.__firebase_config : undefined;
   if (typeof rawConfig !== 'string') return {};
@@ -199,14 +218,18 @@ const parseInjectedFirebaseConfig = () => {
   }
 };
 
-const firebaseConfig = parseInjectedFirebaseConfig();
+const firebaseConfig = {
+  ...getEnvFirebaseConfig(),
+  ...parseInjectedFirebaseConfig()
+};
 const initialAuthToken = typeof globalThis !== 'undefined' ? globalThis.__initial_auth_token : undefined;
 const appId = typeof globalThis !== 'undefined' && globalThis.__app_id ? globalThis.__app_id : 'tone-shift-hub';
-let app, auth, db;
+let app, auth, db, storage;
 if (firebaseConfig.apiKey) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
 }
 
 export default function App() {
@@ -225,6 +248,11 @@ export default function App() {
   const [selectedGig, setSelectedGig] = useState(null);
   const [selectedVenuePackImage, setSelectedVenuePackImage] = useState(null);
   const [formStatus, setFormStatus] = useState('idle');
+  const [isAuthReady, setIsAuthReady] = useState(!auth);
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const [newPost, setNewPost] = useState({
     id: null,
@@ -237,19 +265,34 @@ export default function App() {
     date: new Date().toLocaleDateString('en-GB')
   });
 
-  const isOwner = user && (AUTHORIZED_ID === "" || user.uid === AUTHORIZED_ID);
+  const isOwner = Boolean(user && (AUTHORIZED_ID === "" || user.uid === AUTHORIZED_ID));
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+      setIsAuthReady(true);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      setUser(nextUser);
+      setIsAuthReady(true);
+    });
+
     const initAuth = async () => {
-      if (initialAuthToken) {
-        await signInWithCustomToken(auth, initialAuthToken);
-      } else {
-        await signInAnonymously(auth);
+      try {
+        if (initialAuthToken) {
+          await signInWithCustomToken(auth, initialAuthToken);
+        } else if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error('Auth init error:', error);
+        setAuthError('Authentication is not configured correctly yet.');
+        setIsAuthReady(true);
       }
     };
+
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
@@ -373,6 +416,75 @@ export default function App() {
     } catch {
       setFormStatus('error');
       setTimeout(() => setFormStatus('idle'), 5000);
+    }
+  };
+
+  const handleOwnerSignIn = async () => {
+    if (!auth) return;
+    setIsAuthBusy(true);
+    setAuthError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error('Owner sign-in error:', error);
+      setAuthError('Sign-in failed. Make sure Google sign-in is enabled in Firebase Authentication.');
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleOwnerSignOut = async () => {
+    if (!auth) return;
+    setIsAuthBusy(true);
+    setAuthError('');
+    try {
+      await signOut(auth);
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error('Owner sign-out error:', error);
+      setAuthError('Sign-out failed. Please refresh the page.');
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!isOwner || !storage) {
+      setUploadError('Image upload is unavailable until owner authentication is active.');
+      e.target.value = '';
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please choose an image file.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadError('Image must be under 8 MB.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setUploadError('');
+
+    try {
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const imagePath = `artifacts/${appId}/blogImages/${Date.now()}-${safeFileName}`;
+      const imageRef = storageRef(storage, imagePath);
+      await uploadBytes(imageRef, file, { contentType: file.type, cacheControl: 'public,max-age=31536000' });
+      const imageUrl = await getDownloadURL(imageRef);
+      setNewPost((prev) => ({ ...prev, img: imageUrl }));
+    } catch (error) {
+      console.error('Image upload error:', error);
+      setUploadError('Upload failed. Check Firebase Storage rules and try again.');
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = '';
     }
   };
 
@@ -553,7 +665,7 @@ export default function App() {
                 <DropdownItem section="videos" label="YouTube" icon={Youtube} />
                 <DropdownItem section="news" label="Guitar Blog" icon={Newspaper} />
                 <DropdownItem section="business" label="Business" icon={Briefcase} />
-                {isOwner && <DropdownItem section="admin" label="Manager" icon={Settings} />}
+                {auth && <DropdownItem section="admin" label="Manager" icon={Settings} />}
               </div>
             </div>
           </div>
@@ -837,42 +949,104 @@ export default function App() {
         )}
 
         {/* CONTENT MANAGER */}
-        {activeSection === 'admin' && isOwner && (
+        {activeSection === 'admin' && (
           <div className="max-w-4xl mx-auto animate-in fade-in duration-500">
             <h2 className="text-3xl font-bold mb-8 flex items-center gap-3 text-white"><Settings className="text-white/40" /> Content Manager</h2>
-            <div className="bg-black/60 border border-white/10 rounded-3xl p-8 mb-8 shadow-2xl">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">{newPost.id ? <Edit3 size={20} className="text-blue-400" /> : <Plus size={20} className="text-blue-400" />}{newPost.id ? "Edit Journal Entry" : "New Blog Entry"}</h3>
-              <form onSubmit={handleSavePost} className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Entry Title</label><input value={newPost.title} onChange={e => setNewPost({...newPost, title: e.target.value})} type="text" required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
-                  <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Category</label><input value={newPost.tag} onChange={e => setNewPost({...newPost, tag: e.target.value})} type="text" required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
+
+            {!auth ? (
+              <div className="bg-black/60 border border-white/10 rounded-3xl p-8 shadow-2xl text-white/80 space-y-3">
+                <p className="font-semibold text-white">Manager tools need Firebase configuration.</p>
+                <p className="text-sm">Set Firebase web config environment variables for this site, then redeploy.</p>
+              </div>
+            ) : !isOwner ? (
+              <div className="bg-black/60 border border-white/10 rounded-3xl p-8 shadow-2xl space-y-5">
+                {!isAuthReady ? (
+                  <p className="text-white/70">Checking authentication...</p>
+                ) : (
+                  <>
+                    <p className="text-white font-semibold">Sign in with your owner Google account to manage the ToneShift journal.</p>
+                    {user && (
+                      <div className="text-xs text-white/50 bg-black/40 border border-white/10 rounded-lg px-4 py-3">
+                        Current UID: <span className="text-white/80">{user.uid}</span>
+                      </div>
+                    )}
+                    {user && !user.isAnonymous && AUTHORIZED_ID && user.uid !== AUTHORIZED_ID && (
+                      <p className="text-amber-300 text-sm">This account is signed in, but it is not the authorized manager account.</p>
+                    )}
+                    {authError && <p className="text-red-300 text-sm">{authError}</p>}
+                    <button
+                      type="button"
+                      onClick={handleOwnerSignIn}
+                      disabled={isAuthBusy}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg active:scale-95 disabled:opacity-50"
+                    >
+                      {isAuthBusy ? 'Signing in...' : 'Sign in with Google'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-end mb-4">
+                  <button
+                    type="button"
+                    onClick={handleOwnerSignOut}
+                    disabled={isAuthBusy}
+                    className="px-4 py-2 rounded-lg bg-white/10 border border-white/10 text-white/80 hover:bg-white/20 transition-colors disabled:opacity-50"
+                  >
+                    {isAuthBusy ? 'Signing out...' : 'Sign out'}
+                  </button>
                 </div>
-                <div className="p-6 bg-white/5 border border-white/5 rounded-2xl space-y-6">
-                  <h4 className="text-sm font-bold uppercase tracking-widest text-white/40 border-b border-white/5 pb-2 flex items-center gap-2"><ImageIcon size={14}/> Image Settings</h4>
-                  <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Image URL</label><input value={newPost.img} onChange={e => setNewPost({...newPost, img: e.target.value})} type="text" placeholder="https://..." className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
-                  {newPost.img && (
-                    <div className="grid md:grid-cols-2 gap-8 pt-2">
-                      <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-4 px-1">Image Height: {newPost.imgHeight}px</label><input type="range" min="200" max="600" step="50" value={newPost.imgHeight} onChange={e => setNewPost({...newPost, imgHeight: parseInt(e.target.value)})} className="w-full h-2 bg-blue-900 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
-                      <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-3 px-1">Fit Mode</label><div className="flex gap-2">
-                        <button type="button" onClick={() => setNewPost({...newPost, imgFit: 'cover'})} className={`flex-1 py-2 rounded-lg border transition-all ${newPost.imgFit === 'cover' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/40 border-white/10 text-white/40'}`}>Fill Frame</button>
-                        <button type="button" onClick={() => setNewPost({...newPost, imgFit: 'contain'})} className={`flex-1 py-2 rounded-lg border transition-all ${newPost.imgFit === 'contain' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/40 border-white/10 text-white/40'}`}>Show Entire Image</button>
-                      </div></div>
+
+                <div className="bg-black/60 border border-white/10 rounded-3xl p-8 mb-8 shadow-2xl">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">{newPost.id ? <Edit3 size={20} className="text-blue-400" /> : <Plus size={20} className="text-blue-400" />}{newPost.id ? "Edit Journal Entry" : "New Blog Entry"}</h3>
+                  <form onSubmit={handleSavePost} className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Entry Title</label><input value={newPost.title} onChange={e => setNewPost({...newPost, title: e.target.value})} type="text" required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
+                      <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Category</label><input value={newPost.tag} onChange={e => setNewPost({...newPost, tag: e.target.value})} type="text" required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
                     </div>
-                  )}
+                    <div className="p-6 bg-white/5 border border-white/5 rounded-2xl space-y-6">
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-white/40 border-b border-white/5 pb-2 flex items-center gap-2"><ImageIcon size={14}/> Image Settings</h4>
+                      <div className="space-y-3">
+                        <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Image URL</label><input value={newPost.img} onChange={e => setNewPost({...newPost, img: e.target.value})} type="text" placeholder="https://..." className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/10 text-sm font-medium transition-colors">
+                            {isUploadingImage ? 'Uploading...' : 'Upload Image'}
+                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
+                          </label>
+                          {newPost.img && (
+                            <button type="button" onClick={() => setNewPost((prev) => ({ ...prev, img: '' }))} className="text-sm px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white/70 hover:text-white">
+                              Clear Image
+                            </button>
+                          )}
+                        </div>
+                        {uploadError && <p className="text-sm text-red-300">{uploadError}</p>}
+                      </div>
+                      {newPost.img && (
+                        <div className="grid md:grid-cols-2 gap-8 pt-2">
+                          <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-4 px-1">Image Height: {newPost.imgHeight}px</label><input type="range" min="200" max="600" step="50" value={newPost.imgHeight} onChange={e => setNewPost({...newPost, imgHeight: parseInt(e.target.value)})} className="w-full h-2 bg-blue-900 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
+                          <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-3 px-1">Fit Mode</label><div className="flex gap-2">
+                            <button type="button" onClick={() => setNewPost({...newPost, imgFit: 'cover'})} className={`flex-1 py-2 rounded-lg border transition-all ${newPost.imgFit === 'cover' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/40 border-white/10 text-white/40'}`}>Fill Frame</button>
+                            <button type="button" onClick={() => setNewPost({...newPost, imgFit: 'contain'})} className={`flex-1 py-2 rounded-lg border transition-all ${newPost.imgFit === 'contain' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/40 border-white/10 text-white/40'}`}>Show Entire Image</button>
+                          </div></div>
+                        </div>
+                      )}
+                    </div>
+                    <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Journal Content</label><textarea value={newPost.content} onChange={e => setNewPost({...newPost, content: e.target.value})} required rows="8" placeholder="Type your journal entry here..." className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 resize-none font-sans" /></div>
+                    <div className="flex gap-4"><button type="submit" className="flex-grow bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">{newPost.id ? "Update Post" : "Post to Blog"}</button>{newPost.id && ( <button type="button" onClick={handleCancelEdit} className="px-8 py-4 rounded-xl font-bold bg-white/10 border border-white/10 hover:bg-white/20 transition-all">Cancel</button> )}</div>
+                  </form>
                 </div>
-                <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Journal Content</label><textarea value={newPost.content} onChange={e => setNewPost({...newPost, content: e.target.value})} required rows="8" placeholder="Type your journal entry here..." className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 resize-none font-sans" /></div>
-                <div className="flex gap-4"><button type="submit" className="flex-grow bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">{newPost.id ? "Update Post" : "Post to Blog"}</button>{newPost.id && ( <button type="button" onClick={handleCancelEdit} className="px-8 py-4 rounded-xl font-bold bg-white/10 border border-white/10 hover:bg-white/20 transition-all">Cancel</button> )}</div>
-              </form>
-            </div>
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold mb-4 text-white/40 px-2">Manage Existing Entries</h3>
-              {blogPosts.map((post, idx) => (
-                <div key={`${post.id}-${idx}`} className="bg-white/5 border border-white/10 p-6 rounded-2xl flex items-center justify-between gap-4 group">
-                  <div className="flex-grow"><h4 className="font-bold text-lg group-hover:text-blue-400 transition-colors">{post.title}</h4><p className="text-sm text-white/40">{post.date}</p></div>
-                  <div className="flex gap-2"><button onClick={() => handleEditClick(post)} className="p-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-colors" title="Edit Post"><Edit3 size={18} /></button><button onClick={() => handleDeletePost(post.id)} className="p-3 bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600 hover:text-white transition-colors" title="Delete Post"><Trash2 size={18} /></button></div>
+                <div className="space-y-4">
+                  <h3 className="text-xl font-bold mb-4 text-white/40 px-2">Manage Existing Entries</h3>
+                  {blogPosts.map((post, idx) => (
+                    <div key={`${post.id}-${idx}`} className="bg-white/5 border border-white/10 p-6 rounded-2xl flex items-center justify-between gap-4 group">
+                      <div className="flex-grow"><h4 className="font-bold text-lg group-hover:text-blue-400 transition-colors">{post.title}</h4><p className="text-sm text-white/40">{post.date}</p></div>
+                      <div className="flex gap-2"><button onClick={() => handleEditClick(post)} className="p-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-colors" title="Edit Post"><Edit3 size={18} /></button><button onClick={() => handleDeletePost(post.id)} className="p-3 bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600 hover:text-white transition-colors" title="Delete Post"><Trash2 size={18} /></button></div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         )}
 
@@ -936,7 +1110,7 @@ export default function App() {
               <NavItem section="videos" label="YouTube Channel" icon={Youtube} />
               <NavItem section="news" label="Guitar Blog" icon={Newspaper} />
               <NavItem section="business" label="Business Enquiries" icon={Briefcase} />
-              {isOwner && <NavItem section="admin" label="Manager" icon={Settings} />}
+              {auth && <NavItem section="admin" label="Manager" icon={Settings} />}
             </div>
           </div>
         </div>

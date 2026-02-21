@@ -37,6 +37,13 @@ Variables used by the app:
 - `VITE_GCAL_API_KEY`
 - `VITE_GCAL_ID`
 - `VITE_YT_CHANNEL_ID` (optional, defaults to `@maxmctavish` channel ID)
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID` (optional)
 
 ## YouTube Latest Videos (No API Quota)
 
@@ -45,6 +52,13 @@ If the feed cannot be fetched, the app falls back to the hardcoded `PERMANENT_VI
 
 For production (GitHub Pages), set these as **Repository Variables** in GitHub:
 `Settings -> Secrets and variables -> Actions -> Variables`.
+
+## Journal Manager Workflow
+
+- Open **Manager** in the site nav.
+- Sign in with the owner Google account.
+- Create/edit/delete blog posts in the Content Manager UI.
+- Upload blog images directly (stored in Firebase Storage) or paste an external image URL.
 
 ## Security Checklist (Required)
 

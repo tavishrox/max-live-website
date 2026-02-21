@@ -48,6 +48,7 @@ const AUTHORIZED_ID = import.meta.env.VITE_AUTHORIZED_ID ?? "";
 const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT ?? "";
 const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GCAL_API_KEY ?? "";
 const GOOGLE_CALENDAR_ID = import.meta.env.VITE_GCAL_ID ?? "";
+const YOUTUBE_CHANNEL_ID = import.meta.env.VITE_YT_CHANNEL_ID ?? "UC8Fy07TKY0txLxOgj7edHCA";
 
 const isSafeExternalUrl = (value) => {
   if (!value || typeof value !== 'string') return false;
@@ -60,6 +61,46 @@ const isSafeExternalUrl = (value) => {
 };
 
 const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? value : fallback);
+
+const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v1';
+const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 30;
+
+const summarizeVideoDescription = (value) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= 140) return normalized;
+  return `${normalized.slice(0, 137)}...`;
+};
+
+const getEntryText = (entry, localName, namespacedName) => {
+  const localNode = entry.getElementsByTagNameNS('*', localName)[0];
+  if (localNode?.textContent) return localNode.textContent.trim();
+  const namespacedNode = entry.getElementsByTagName(namespacedName)[0];
+  if (namespacedNode?.textContent) return namespacedNode.textContent.trim();
+  return '';
+};
+
+const parseYouTubeFeed = (xmlText) => {
+  if (typeof DOMParser === 'undefined') return [];
+  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (xml.querySelector('parsererror')) return [];
+
+  const entries = Array.from(xml.getElementsByTagName('entry')).slice(0, 6);
+  return entries.map((entry, index) => {
+    const title = getEntryText(entry, 'title', 'title');
+    const videoId = getEntryText(entry, 'videoId', 'yt:videoId');
+    const description = getEntryText(entry, 'description', 'media:description');
+    const altLink = Array.from(entry.getElementsByTagName('link')).find((node) => node.getAttribute('rel') === 'alternate');
+    const feedUrl = altLink?.getAttribute('href') ?? '';
+    const url = feedUrl || (videoId ? `https://youtu.be/${videoId}` : '');
+
+    return {
+      id: videoId || `feed-video-${index}`,
+      title: title || 'Latest video',
+      description: summarizeVideoDescription(description) || 'Watch the newest upload on YouTube.',
+      url
+    };
+  }).filter((video) => Boolean(video.url));
+};
 
 // --- PERMANENT VIDEOS LIST ---
 // Update these links and titles whenever you want to feature new content.
@@ -130,8 +171,7 @@ export default function App() {
   
   const [gigs, setGigs] = useState([]);
   const [isLoadingGigs, setIsLoadingGigs] = useState(true);
-  
-  const videos = PERMANENT_VIDEOS;
+  const [videos, setVideos] = useState(PERMANENT_VIDEOS);
   
   const [blogPosts, setBlogPosts] = useState([]);
   const [visibleGigsCount, setVisibleGigsCount] = useState(6);
@@ -177,6 +217,65 @@ export default function App() {
     }, (error) => console.error("Blog fetch error:", error));
     return () => unsubscribeBlog();
   }, [user]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadLatestVideos = async () => {
+      if (!YOUTUBE_CHANNEL_ID) return;
+
+      try {
+        const cachedRaw = window.localStorage.getItem(YOUTUBE_FEED_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.expiresAt > Date.now() && Array.isArray(cached?.videos) && cached.videos.length > 0) {
+            setVideos(cached.videos.slice(0, 6));
+            return;
+          }
+        }
+      } catch {
+        // Ignore cache read issues and continue with network fetch.
+      }
+
+      const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
+      const feedUrls = [
+        baseFeedUrl,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(baseFeedUrl)}`
+      ];
+
+      for (const feedUrl of feedUrls) {
+        try {
+          const response = await fetch(feedUrl, {
+            headers: { Accept: 'application/atom+xml,text/xml,application/xml,*/*' }
+          });
+          if (!response.ok) continue;
+
+          const feedText = await response.text();
+          const latestVideos = parseYouTubeFeed(feedText);
+          if (latestVideos.length === 0) continue;
+          if (isCancelled) return;
+
+          setVideos(latestVideos);
+          try {
+            window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
+              expiresAt: Date.now() + YOUTUBE_FEED_CACHE_TTL_MS,
+              videos: latestVideos
+            }));
+          } catch {
+            // Ignore cache write issues.
+          }
+          return;
+        } catch {
+          // Try next feed endpoint.
+        }
+      }
+    };
+
+    loadLatestVideos();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const venuePackItems = [
     { id: 'vp-1', title: "Promo Shot 1", type: "Poster", url: "https://iili.io/q3vvvsa.jpg", thumb: "https://iili.io/q3vvvsa.jpg" },

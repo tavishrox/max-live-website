@@ -36,6 +36,12 @@ Variables used by the app:
 - `VITE_FORM_ENDPOINT`
 - `VITE_GCAL_API_KEY`
 - `VITE_GCAL_ID`
+- `VITE_YT_CHANNEL_ID` (optional, defaults to `@maxmctavish` channel ID)
+
+## YouTube Latest Videos (No API Quota)
+
+The videos section reads the latest uploads from YouTube's public channel RSS feed (no YouTube Data API key required).
+If the feed cannot be fetched, the app falls back to the hardcoded `PERMANENT_VIDEOS` list.
 
 For production (GitHub Pages), set these as **Repository Variables** in GitHub:
 `Settings -> Secrets and variables -> Actions -> Variables`.

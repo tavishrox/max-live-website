@@ -9,6 +9,13 @@ import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 const OWNER_UID = '05378337030731377140';
 const APP_ID = 'tone-shift-hub';
 const BLOG_COLLECTION_PATH = `artifacts/${APP_ID}/public/data/blogPosts`;
+const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080';
+const [host, portString] = emulatorHost.split(':');
+const port = Number(portString);
+
+if (!host || Number.isNaN(port)) {
+  throw new Error(`Invalid FIRESTORE_EMULATOR_HOST value: "${emulatorHost}"`);
+}
 
 async function run() {
   const rules = await fs.readFile('firestore.rules', 'utf8');
@@ -16,8 +23,8 @@ async function run() {
   const testEnv = await initializeTestEnvironment({
     projectId: 'rules-test-project',
     firestore: {
-      host: '127.0.0.1',
-      port: 8080,
+      host,
+      port,
       rules,
     },
   });

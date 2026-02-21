@@ -32,8 +32,20 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verify Firestore Rules
+        run: npm run test:firestore-rules
 
       - name: Build site
         run: npm run build

@@ -102,6 +102,26 @@ const PERMANENT_VIDEOS = [
   }
 ];
 
+const buildManualGig = ({ id, venue, location, start }) => {
+  const rawDate = new Date(start);
+  return {
+    id,
+    venue,
+    location,
+    date: rawDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' }),
+    time: rawDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }),
+    rawDate
+  };
+};
+
+const MANUAL_GIGS = [
+  buildManualGig({ id: 'manual-gig-1', venue: 'The Falcon', location: 'Mansfield', start: '2026-03-06T20:30:00+00:00' }),
+  buildManualGig({ id: 'manual-gig-2', venue: 'The Railway Inn', location: 'Nottingham', start: '2026-03-13T21:00:00+00:00' }),
+  buildManualGig({ id: 'manual-gig-3', venue: 'The Market Tavern', location: 'Chesterfield', start: '2026-03-20T20:00:00+00:00' }),
+  buildManualGig({ id: 'manual-gig-4', venue: 'The King\'s Arms', location: 'Derby', start: '2026-03-27T21:00:00+00:00' }),
+  buildManualGig({ id: 'manual-gig-5', venue: 'The Riverside Bar', location: 'Newark', start: '2026-04-03T20:30:00+00:00' })
+];
+
 // --- FIREBASE SETUP ---
 const parseInjectedFirebaseConfig = () => {
   const rawConfig = typeof globalThis !== 'undefined' ? globalThis.__firebase_config : undefined;
@@ -134,7 +154,7 @@ export default function App() {
   const videos = PERMANENT_VIDEOS;
   
   const [blogPosts, setBlogPosts] = useState([]);
-  const visibleGigsCount = 6;
+  const [visibleGigsCount, setVisibleGigsCount] = useState(6);
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedGig, setSelectedGig] = useState(null);
@@ -193,6 +213,7 @@ export default function App() {
   };
 
   const isToneShift = ['videos', 'news', 'business', 'admin'].includes(activeSection);
+  const allGigs = [...gigs, ...MANUAL_GIGS].sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
   const safeVenuePackImageUrl = selectedVenuePackImage ? safeExternalUrl(selectedVenuePackImage.url) : '';
 
   const handleFormSubmit = async (e, formType) => {
@@ -315,7 +336,7 @@ export default function App() {
           {dayHeaders.map(day => ( <div key={`header-${day}`} className="text-center text-sm font-semibold text-white/40 py-2">{day}</div> ))}
           {Array(firstDay).fill(null).map((_, i) => ( <div key={`blank-${i}`} className="p-2 md:p-4 bg-white/5 rounded-lg"></div> ))}
           {Array.from({length: daysInMonth}, (_, i) => i + 1).map(day => {
-            const gig = gigs.find(g => {
+            const gig = allGigs.find(g => {
               const d = new Date(g.rawDate);
               return d.getDate() === day && d.getMonth() === calendarDate.getMonth() && d.getFullYear() === calendarDate.getFullYear();
             });
@@ -517,12 +538,22 @@ export default function App() {
                 </div>
                 {isLoadingGigs ? <div className="text-white/40 text-center py-8">Loading gigs...</div> : showCalendar ? renderCalendar() : (
                   <div className="space-y-4">
-                    {gigs.slice(0, visibleGigsCount).map((gig, idx) => (
+                    {allGigs.slice(0, visibleGigsCount).map((gig, idx) => (
                       <button key={`${gig.id}-${idx}`} onClick={() => setSelectedGig(gig)} className="w-full text-left bg-black/60 backdrop-blur-md border border-white/10 p-6 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl hover:bg-black/80 hover:border-blue-500/30 transition-all group">
                         <div><div className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{gig.venue}</div><div className="text-white/40 flex items-center gap-2"><MapPin size={16} className="text-blue-400/50" /> {gig.location}</div></div>
                         <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 w-full md:w-auto"><div className="flex items-center gap-4 text-white bg-black/40 px-4 py-3 rounded-lg border border-white/10 w-full md:w-auto justify-center"><div className="font-semibold text-blue-400">{gig.date}</div><div className="w-px h-4 bg-white/10"></div><div>{gig.time}</div></div></div>
                       </button>
                     ))}
+                    {visibleGigsCount < allGigs.length && (
+                      <div className="pt-2 flex justify-center">
+                        <button
+                          onClick={() => setVisibleGigsCount((count) => Math.min(count + 5, allGigs.length))}
+                          className="text-sm bg-white/10 hover:bg-white/20 text-white px-5 py-2 rounded-lg font-medium transition-colors border border-white/10"
+                        >
+                          Show 5 More
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

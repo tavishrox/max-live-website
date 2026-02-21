@@ -7,6 +7,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut
 } from 'firebase/auth';
 import { 
@@ -271,6 +273,8 @@ export default function App() {
 
     const initAuth = async () => {
       try {
+        // Resolve possible result from redirect-based sign-in flow.
+        await getRedirectResult(auth).catch(() => null);
         if (initialAuthToken) {
           await signInWithCustomToken(auth, initialAuthToken);
         } else if (!auth.currentUser) {
@@ -414,13 +418,22 @@ export default function App() {
     if (!auth) return;
     setIsAuthBusy(true);
     setAuthError('');
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error('Owner sign-in error:', error);
       const errorCode = typeof error?.code === 'string' ? error.code : 'auth/unknown';
+      if (['auth/internal-error', 'auth/popup-blocked', 'auth/cancelled-popup-request'].includes(errorCode)) {
+        try {
+          setAuthError('Popup sign-in failed. Redirecting to Google sign-in...');
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectError) {
+          console.error('Owner redirect sign-in error:', redirectError);
+        }
+      }
       const codeSpecificMessage = ({
         'auth/operation-not-allowed': 'Google sign-in is disabled in Firebase Authentication for this project.',
         'auth/unauthorized-domain': 'This website domain is not in Firebase Authentication authorized domains.',

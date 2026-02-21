@@ -524,25 +524,26 @@ export default function App() {
 
       <nav className="border-b sticky top-0 z-50 bg-black/50 border-white/10 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
-          <div className="cursor-pointer flex items-center gap-3" onClick={() => navigateTo('home')}>
-            <span className="text-white font-normal text-2xl md:text-3xl tracking-wide drop-shadow-lg" style={{ fontFamily: "'Playwrite AU SA', cursive" }}>Max McTavish</span>
+          <div className="hidden lg:flex items-center gap-3">
+            <button className="text-white font-normal text-3xl tracking-wide drop-shadow-lg" style={{ fontFamily: "'Playwrite AU SA', cursive" }} onClick={() => navigateTo('home')}>
+              Max McTavish
+            </button>
             <span className="text-white/20 text-xl font-bold">|</span>
-            <img src="https://iili.io/q3ui8a1.png" alt="ToneShift" className="h-8 md:h-10 w-auto object-contain" />
-          </div>
-
-          <div className="hidden lg:flex items-center space-x-2">
             <div className="relative group">
               <button className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${!isToneShift && activeSection !== 'home' ? 'bg-blue-600 text-white' : 'text-white/80 hover:bg-white/10'}`}>
                 Max Live <ChevronDown size={14} className="group-hover:rotate-180 transition-transform" />
               </button>
-              <div className="absolute top-full right-0 mt-2 w-48 rounded-xl border border-white/10 bg-black/90 backdrop-blur-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden shadow-2xl">
+              <div className="absolute top-full left-0 mt-2 w-48 rounded-xl border border-white/10 bg-black/90 backdrop-blur-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden shadow-2xl">
                 <DropdownItem section="bio" label="About Max" icon={User} />
                 <DropdownItem section="gigs" label="Upcoming Gigs" icon={CalendarDays} />
                 <DropdownItem section="venue-pack" label="Venue Pack" icon={Download} />
                 <DropdownItem section="bookings" label="Bookings" icon={Mail} />
               </div>
             </div>
-            <div className="w-px h-6 bg-white/10"></div>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-4">
+            <img src="https://iili.io/q3ui8a1.png" alt="ToneShift" className="h-10 w-auto object-contain cursor-pointer" onClick={() => navigateTo('videos')} />
             <div className="relative group">
               <button className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${isToneShift && activeSection !== 'home' ? 'bg-blue-600 text-white' : 'text-white/80 hover:bg-white/10'}`}>
                 ToneShift <ChevronDown size={14} className="group-hover:rotate-180 transition-transform" />
@@ -554,6 +555,12 @@ export default function App() {
                 {isOwner && <DropdownItem section="admin" label="Manager" icon={Settings} />}
               </div>
             </div>
+          </div>
+
+          <div className="lg:hidden cursor-pointer flex items-center gap-3" onClick={() => navigateTo('home')}>
+            <span className="text-white font-normal text-2xl md:text-3xl tracking-wide drop-shadow-lg" style={{ fontFamily: "'Playwrite AU SA', cursive" }}>Max McTavish</span>
+            <span className="text-white/20 text-xl font-bold">|</span>
+            <img src="https://iili.io/q3ui8a1.png" alt="ToneShift" className="h-8 md:h-10 w-auto object-contain" />
           </div>
           <button className="lg:hidden p-2 text-white" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle Menu">
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}

@@ -70,6 +70,13 @@ const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? va
 
 const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v2';
 const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 30;
+const APP_SECTIONS = new Set(['home', 'bio', 'gigs', 'venue-pack', 'bookings', 'videos', 'news', 'business', 'admin']);
+
+const getSectionFromHash = () => {
+  if (typeof window === 'undefined') return 'home';
+  const hashSection = window.location.hash.replace('#', '').trim();
+  return APP_SECTIONS.has(hashSection) ? hashSection : 'home';
+};
 
 const summarizeVideoDescription = (value) => {
   const normalized = value.replace(/\s+/g, ' ').trim();
@@ -229,7 +236,7 @@ if (firebaseConfig.apiKey) {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeSection, setActiveSection] = useState('home');
+  const [activeSection, setActiveSection] = useState(getSectionFromHash);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const [gigs, setGigs] = useState([]);
@@ -267,8 +274,20 @@ export default function App() {
     const pendingSection = window.localStorage.getItem('pending-section-after-auth');
     if (pendingSection) {
       setActiveSection(pendingSection);
+      const hashValue = pendingSection === 'home' ? '' : `#${pendingSection}`;
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hashValue}`);
       window.localStorage.removeItem('pending-section-after-auth');
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncSectionFromHash = () => {
+      const nextSection = getSectionFromHash();
+      setActiveSection((previousSection) => (previousSection === nextSection ? previousSection : nextSection));
+    };
+    window.addEventListener('hashchange', syncSectionFromHash);
+    return () => window.removeEventListener('hashchange', syncSectionFromHash);
   }, []);
 
   useEffect(() => {
@@ -393,6 +412,10 @@ export default function App() {
 
   const navigateTo = (section) => {
     setActiveSection(section);
+    const hashValue = section === 'home' ? '' : `#${section}`;
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hashValue}`);
+    }
     setSelectedGig(null);
     setSelectedVenuePackImage(null);
     setIsMobileMenuOpen(false);

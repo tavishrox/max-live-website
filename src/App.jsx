@@ -63,7 +63,7 @@ const isSafeExternalUrl = (value) => {
 
 const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? value : fallback);
 
-const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v1';
+const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v2';
 const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 30;
 
 const summarizeVideoDescription = (value) => {
@@ -113,6 +113,12 @@ const getVideoThumbnailUrl = (video) => {
   return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '';
 };
 
+const isYouTubeShort = (video) => {
+  if (!video) return false;
+  const textBlob = `${video.title || ''} ${video.description || ''}`;
+  return (video.url || '').includes('/shorts/') || /\b#shorts\b/i.test(textBlob);
+};
+
 const parseYouTubeFeed = (xmlText) => {
   if (typeof DOMParser === 'undefined') return [];
   const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
@@ -127,7 +133,7 @@ const parseYouTubeFeed = (xmlText) => {
     const altLink = Array.from(entry.getElementsByTagName('link')).find((node) => node.getAttribute('rel') === 'alternate');
     const feedUrl = altLink?.getAttribute('href') ?? '';
     const url = feedUrl || (videoId ? `https://youtu.be/${videoId}` : '');
-    const isShort = url.includes('/shorts/') || /\b#shorts\b/i.test(`${title} ${description}`);
+    const isShort = isYouTubeShort({ url, title, description });
 
     return {
       id: videoId || `feed-video-${index}`,
@@ -268,12 +274,21 @@ export default function App() {
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw);
           if (cached?.expiresAt > Date.now() && Array.isArray(cached?.videos) && cached.videos.length > 0) {
-            setVideos(cached.videos.slice(0, 6));
-            return;
+            const filteredCachedVideos = cached.videos.filter((video) => !isYouTubeShort(video)).slice(0, 6);
+            if (filteredCachedVideos.length > 0) {
+              setVideos(filteredCachedVideos);
+              return;
+            }
           }
         }
       } catch {
         // Ignore cache read issues and continue with network fetch.
+      }
+
+      // Keep fallback list short-free too.
+      const filteredFallbackVideos = PERMANENT_VIDEOS.filter((video) => !isYouTubeShort(video)).slice(0, 6);
+      if (filteredFallbackVideos.length > 0) {
+        setVideos(filteredFallbackVideos);
       }
 
       const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
@@ -862,7 +877,7 @@ export default function App() {
             </div>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {videos.map((video, idx) => {
+              {videos.filter((video) => !isYouTubeShort(video)).slice(0, 6).map((video, idx) => {
                 const safeVideoUrl = safeExternalUrl(video.url, '#');
                 const safeThumbnailUrl = safeExternalUrl(getVideoThumbnailUrl(video));
                 return (

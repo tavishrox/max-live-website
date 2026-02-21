@@ -118,7 +118,7 @@ const parseYouTubeFeed = (xmlText) => {
   const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
   if (xml.querySelector('parsererror')) return [];
 
-  const entries = Array.from(xml.getElementsByTagName('entry')).slice(0, 6);
+  const entries = Array.from(xml.getElementsByTagName('entry'));
   return entries.map((entry, index) => {
     const title = getEntryText(entry, 'title', 'title');
     const videoId = getEntryText(entry, 'videoId', 'yt:videoId');
@@ -127,6 +127,7 @@ const parseYouTubeFeed = (xmlText) => {
     const altLink = Array.from(entry.getElementsByTagName('link')).find((node) => node.getAttribute('rel') === 'alternate');
     const feedUrl = altLink?.getAttribute('href') ?? '';
     const url = feedUrl || (videoId ? `https://youtu.be/${videoId}` : '');
+    const isShort = url.includes('/shorts/') || /\b#shorts\b/i.test(`${title} ${description}`);
 
     return {
       id: videoId || `feed-video-${index}`,
@@ -134,9 +135,10 @@ const parseYouTubeFeed = (xmlText) => {
       description: summarizeVideoDescription(description) || 'Watch the newest upload on YouTube.',
       videoId,
       thumbnail,
-      url
+      url,
+      isShort
     };
-  }).filter((video) => Boolean(video.url));
+  }).filter((video) => Boolean(video.url) && !video.isShort).slice(0, 6);
 };
 
 // --- PERMANENT VIDEOS LIST ---

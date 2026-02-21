@@ -523,7 +523,8 @@ export default function App() {
       </div>
 
       <nav className="border-b sticky top-0 z-50 bg-black/50 border-white/10 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center relative">
+          <div className="hidden lg:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-8 w-px bg-white/15 shadow-[0_0_10px_rgba(255,255,255,0.12)] pointer-events-none"></div>
           <div className="hidden lg:flex items-center gap-3">
             <button className="text-white font-normal text-3xl tracking-wide drop-shadow-lg" style={{ fontFamily: "'Playwrite AU SA', cursive" }} onClick={() => navigateTo('home')}>
               Max McTavish

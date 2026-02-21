@@ -31,6 +31,7 @@ import {
   Phone, 
   ChevronDown, 
   ArrowLeft, 
+  PlayCircle,
   ExternalLink, 
   Download, 
   Briefcase, 
@@ -864,11 +865,22 @@ export default function App() {
                 const safeThumbnailUrl = safeExternalUrl(getVideoThumbnailUrl(video));
                 return (
                   <a key={`${video.id}-${idx}`} href={safeVideoUrl} onClick={(e) => safeVideoUrl === '#' && e.preventDefault()} target="_blank" rel="noopener noreferrer" className="bg-black/60 rounded-xl border border-white/10 group hover:border-blue-500/50 transition-all flex flex-col shadow-xl p-6">
-                    {safeThumbnailUrl && (
-                      <div className="mb-4 -mx-1 rounded-lg overflow-hidden border border-white/10 bg-black/30">
+                    <div className="mb-4 -mx-1 rounded-lg overflow-hidden border border-white/10 bg-black/30 relative">
+                      {safeThumbnailUrl ? (
                         <img src={safeThumbnailUrl} alt={video.title} loading="lazy" className="w-full aspect-video object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                      ) : (
+                        <div className="w-full aspect-video flex items-center justify-center bg-black/50">
+                          <Youtube size={36} className="text-red-500/80" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-black/55 border border-white/20 text-white text-sm font-semibold backdrop-blur-sm group-hover:scale-105 transition-transform">
+                          <PlayCircle size={18} className="text-blue-400" />
+                          Watch now
+                        </span>
                       </div>
-                    )}
+                    </div>
                     <div className="flex items-start gap-3 mb-4">
                       <Youtube size={24} className="text-red-500 flex-shrink-0 mt-0.5" />
                       <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors text-lg leading-snug">{video.title}</h3>

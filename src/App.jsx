@@ -18,12 +18,6 @@ import {
   onSnapshot,
   updateDoc
 } from 'firebase/firestore';
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL
-} from 'firebase/storage';
 import { 
   Mic2, 
   Youtube, 
@@ -224,12 +218,11 @@ const firebaseConfig = {
 };
 const initialAuthToken = typeof globalThis !== 'undefined' ? globalThis.__initial_auth_token : undefined;
 const appId = typeof globalThis !== 'undefined' && globalThis.__app_id ? globalThis.__app_id : 'tone-shift-hub';
-let app, auth, db, storage;
+let app, auth, db;
 if (firebaseConfig.apiKey) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
-  storage = getStorage(app);
 }
 
 export default function App() {
@@ -251,8 +244,6 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(!auth);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [uploadError, setUploadError] = useState('');
 
   const [newPost, setNewPost] = useState({
     id: null,
@@ -450,43 +441,6 @@ export default function App() {
     }
   };
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!isOwner || !storage) {
-      setUploadError('Image upload is unavailable until owner authentication is active.');
-      e.target.value = '';
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please choose an image file.');
-      e.target.value = '';
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      setUploadError('Image must be under 8 MB.');
-      e.target.value = '';
-      return;
-    }
-
-    setIsUploadingImage(true);
-    setUploadError('');
-
-    try {
-      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const imagePath = `artifacts/${appId}/blogImages/${Date.now()}-${safeFileName}`;
-      const imageRef = storageRef(storage, imagePath);
-      await uploadBytes(imageRef, file, { contentType: file.type, cacheControl: 'public,max-age=31536000' });
-      const imageUrl = await getDownloadURL(imageRef);
-      setNewPost((prev) => ({ ...prev, img: imageUrl }));
-    } catch (error) {
-      console.error('Image upload error:', error);
-      setUploadError('Upload failed. Check Firebase Storage rules and try again.');
-    } finally {
-      setIsUploadingImage(false);
-      e.target.value = '';
-    }
-  };
 
   const handleEditClick = (post) => {
     setNewPost({
@@ -1007,21 +961,7 @@ export default function App() {
                     </div>
                     <div className="p-6 bg-white/5 border border-white/5 rounded-2xl space-y-6">
                       <h4 className="text-sm font-bold uppercase tracking-widest text-white/40 border-b border-white/5 pb-2 flex items-center gap-2"><ImageIcon size={14}/> Image Settings</h4>
-                      <div className="space-y-3">
-                        <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Image URL</label><input value={newPost.img} onChange={e => setNewPost({...newPost, img: e.target.value})} type="text" placeholder="https://..." className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/10 text-sm font-medium transition-colors">
-                            {isUploadingImage ? 'Uploading...' : 'Upload Image'}
-                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
-                          </label>
-                          {newPost.img && (
-                            <button type="button" onClick={() => setNewPost((prev) => ({ ...prev, img: '' }))} className="text-sm px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white/70 hover:text-white">
-                              Clear Image
-                            </button>
-                          )}
-                        </div>
-                        {uploadError && <p className="text-sm text-red-300">{uploadError}</p>}
-                      </div>
+                      <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-2 px-1">Image URL</label><input value={newPost.img} onChange={e => setNewPost({...newPost, img: e.target.value})} type="text" placeholder="https://..." className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" /></div>
                       {newPost.img && (
                         <div className="grid md:grid-cols-2 gap-8 pt-2">
                           <div><label className="block text-xs font-bold uppercase tracking-widest text-white/40 mb-4 px-1">Image Height: {newPost.imgHeight}px</label><input type="range" min="200" max="600" step="50" value={newPost.imgHeight} onChange={e => setNewPost({...newPost, imgHeight: parseInt(e.target.value)})} className="w-full h-2 bg-blue-900 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>

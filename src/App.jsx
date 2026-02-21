@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
-  signInAnonymously, 
   signInWithCustomToken, 
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -265,9 +264,20 @@ export default function App() {
     date: new Date().toLocaleDateString('en-GB')
   });
 
-  const isOwner = Boolean(user && (AUTHORIZED_ID === "" || user.uid === AUTHORIZED_ID));
+  const ownerId = (AUTHORIZED_ID || '').trim();
+  const googleProviderUid = user?.providerData?.find((provider) => provider.providerId === 'google.com')?.uid || '';
   const isSignedInUser = Boolean(user && !user.isAnonymous);
-  const isWrongOwnerAccount = Boolean(isSignedInUser && AUTHORIZED_ID && user.uid !== AUTHORIZED_ID);
+  const isOwner = Boolean(
+    user &&
+    !user.isAnonymous &&
+    (ownerId === '' || user.uid === ownerId || googleProviderUid === ownerId)
+  );
+  const isWrongOwnerAccount = Boolean(
+    isSignedInUser &&
+    ownerId &&
+    user.uid !== ownerId &&
+    googleProviderUid !== ownerId
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -312,12 +322,11 @@ export default function App() {
         }
         if (initialAuthToken) {
           await signInWithCustomToken(auth, initialAuthToken);
-        } else if (!auth.currentUser) {
-          await signInAnonymously(auth);
         }
       } catch (error) {
         console.error('Auth init error:', error);
-        setAuthError('Authentication is not configured correctly yet.');
+        const errorCode = typeof error?.code === 'string' ? error.code : 'auth/unknown';
+        setAuthError(`Authentication setup issue (${errorCode}).`);
         setIsAuthReady(true);
       }
     };
@@ -327,14 +336,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user || !db) return;
+    if (!db) return;
     const blogRef = collection(db, 'artifacts', appId, 'public', 'data', 'blogPosts');
     const unsubscribeBlog = onSnapshot(blogRef, (snapshot) => {
       const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setBlogPosts(posts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
     }, (error) => console.error("Blog fetch error:", error));
     return () => unsubscribeBlog();
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -494,7 +503,6 @@ export default function App() {
     setAuthError('');
     try {
       await signOut(auth);
-      await signInAnonymously(auth);
     } catch (error) {
       console.error('Owner sign-out error:', error);
       setAuthError('Sign-out failed. Please refresh the page.');

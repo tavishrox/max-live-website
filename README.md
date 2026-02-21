@@ -21,6 +21,8 @@ npm run build
 Deployment is automated with GitHub Actions in `.github/workflows/deploy.yml`.
 Every push to `main` builds and deploys to GitHub Pages.
 
+Custom domain setup instructions are in `DOMAIN_SETUP.md`.
+
 ## Runtime Variables
 
 Copy `.env.example` to `.env` for local overrides:

@@ -420,7 +420,14 @@ export default function App() {
       await signInWithPopup(auth, provider);
     } catch (error) {
       console.error('Owner sign-in error:', error);
-      setAuthError('Sign-in failed. Make sure Google sign-in is enabled in Firebase Authentication.');
+      const errorCode = typeof error?.code === 'string' ? error.code : 'auth/unknown';
+      const codeSpecificMessage = ({
+        'auth/operation-not-allowed': 'Google sign-in is disabled in Firebase Authentication for this project.',
+        'auth/unauthorized-domain': 'This website domain is not in Firebase Authentication authorized domains.',
+        'auth/popup-blocked': 'The browser blocked the sign-in popup. Allow popups for this site and try again.',
+        'auth/popup-closed-by-user': 'The sign-in popup was closed before completing sign-in.'
+      })[errorCode];
+      setAuthError(codeSpecificMessage || `Sign-in failed (${errorCode}).`);
     } finally {
       setIsAuthBusy(false);
     }

@@ -44,10 +44,10 @@ import {
 } from 'lucide-react';
 
 // --- SECURITY & EMAIL SETUP ---
-const AUTHORIZED_ID = import.meta.env.VITE_AUTHORIZED_ID ?? "05378337030731377140";
-const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT ?? "https://formspree.io/f/meellnpy";
-const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GCAL_API_KEY ?? "AIzaSyB9RqjMwafHhUQSSuuKbF03zZyjeWdrmK0";
-const GOOGLE_CALENDAR_ID = import.meta.env.VITE_GCAL_ID ?? "qmri04tlb88nhcaqqvu5rbs50s@group.calendar.google.com";
+const AUTHORIZED_ID = import.meta.env.VITE_AUTHORIZED_ID ?? "";
+const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT ?? "";
+const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GCAL_API_KEY ?? "";
+const GOOGLE_CALENDAR_ID = import.meta.env.VITE_GCAL_ID ?? "";
 
 const isSafeExternalUrl = (value) => {
   if (!value || typeof value !== 'string') return false;

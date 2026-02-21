@@ -102,26 +102,6 @@ const PERMANENT_VIDEOS = [
   }
 ];
 
-const buildManualGig = ({ id, venue, location, start }) => {
-  const rawDate = new Date(start);
-  return {
-    id,
-    venue,
-    location,
-    date: rawDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' }),
-    time: rawDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }),
-    rawDate
-  };
-};
-
-const MANUAL_GIGS = [
-  buildManualGig({ id: 'manual-gig-1', venue: 'The Falcon', location: 'Mansfield', start: '2026-03-06T20:30:00+00:00' }),
-  buildManualGig({ id: 'manual-gig-2', venue: 'The Railway Inn', location: 'Nottingham', start: '2026-03-13T21:00:00+00:00' }),
-  buildManualGig({ id: 'manual-gig-3', venue: 'The Market Tavern', location: 'Chesterfield', start: '2026-03-20T20:00:00+00:00' }),
-  buildManualGig({ id: 'manual-gig-4', venue: 'The King\'s Arms', location: 'Derby', start: '2026-03-27T21:00:00+00:00' }),
-  buildManualGig({ id: 'manual-gig-5', venue: 'The Riverside Bar', location: 'Newark', start: '2026-04-03T20:30:00+00:00' })
-];
-
 // --- FIREBASE SETUP ---
 const parseInjectedFirebaseConfig = () => {
   const rawConfig = typeof globalThis !== 'undefined' ? globalThis.__firebase_config : undefined;
@@ -213,7 +193,7 @@ export default function App() {
   };
 
   const isToneShift = ['videos', 'news', 'business', 'admin'].includes(activeSection);
-  const allGigs = [...gigs, ...MANUAL_GIGS].sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+  const allGigs = [...gigs].sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
   const safeVenuePackImageUrl = selectedVenuePackImage ? safeExternalUrl(selectedVenuePackImage.url) : '';
 
   const handleFormSubmit = async (e, formType) => {

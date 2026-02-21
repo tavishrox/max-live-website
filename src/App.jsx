@@ -900,8 +900,8 @@ export default function App() {
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-black/55 border border-white/20 text-white text-sm font-semibold backdrop-blur-sm group-hover:scale-105 transition-transform">
-                          <PlayCircle size={18} className="text-blue-400" />
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-black/35 border border-white/15 text-white/90 text-xs font-medium backdrop-blur-sm group-hover:scale-105 transition-transform">
+                          <PlayCircle size={14} className="text-blue-300" />
                           Watch now
                         </span>
                       </div>

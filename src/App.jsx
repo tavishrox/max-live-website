@@ -69,6 +69,7 @@ const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? va
 
 const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v2';
 const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 30;
+const PENDING_OWNER_REDIRECT_KEY = 'pending-owner-auth-redirect';
 const APP_SECTIONS = new Set(['home', 'bio', 'gigs', 'venue-pack', 'bookings', 'videos', 'news', 'business', 'admin']);
 
 const getSectionFromHash = () => {
@@ -76,6 +77,14 @@ const getSectionFromHash = () => {
   const hashSection = window.location.hash.replace('#', '').trim();
   return APP_SECTIONS.has(hashSection) ? hashSection : 'home';
 };
+
+const getAuthErrorMessage = (errorCode) => ({
+  'auth/operation-not-allowed': 'Google sign-in is disabled in Firebase Authentication for this project.',
+  'auth/unauthorized-domain': 'This website domain is not in Firebase Authentication authorized domains.',
+  'auth/popup-blocked': 'The browser blocked the sign-in popup. Allow popups for this site and try again.',
+  'auth/popup-closed-by-user': 'The sign-in popup was closed before completing sign-in.',
+  'auth/internal-error': 'Google sign-in failed due to a Firebase/OAuth configuration issue. Try redirect sign-in below.'
+})[errorCode] || `Sign-in failed (${errorCode}).`;
 
 const summarizeVideoDescription = (value) => {
   const normalized = value.replace(/\s+/g, ' ').trim();
@@ -314,11 +323,18 @@ export default function App() {
     const initAuth = async () => {
       try {
         // Resolve possible result from redirect-based sign-in flow.
-        const redirectResult = await getRedirectResult(auth).catch(() => null);
+        const redirectResult = await getRedirectResult(auth);
         if (redirectResult?.user) {
           setUser(redirectResult.user);
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem(PENDING_OWNER_REDIRECT_KEY);
+          }
           setIsAuthReady(true);
           return;
+        }
+        if (typeof window !== 'undefined' && window.localStorage.getItem(PENDING_OWNER_REDIRECT_KEY)) {
+          window.localStorage.removeItem(PENDING_OWNER_REDIRECT_KEY);
+          setAuthError('Google redirect sign-in did not complete. Check Firebase Google sign-in settings and authorized domains.');
         }
         if (initialAuthToken) {
           await signInWithCustomToken(auth, initialAuthToken);
@@ -326,7 +342,10 @@ export default function App() {
       } catch (error) {
         console.error('Auth init error:', error);
         const errorCode = typeof error?.code === 'string' ? error.code : 'auth/unknown';
-        setAuthError(`Authentication setup issue (${errorCode}).`);
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(PENDING_OWNER_REDIRECT_KEY);
+        }
+        setAuthError(getAuthErrorMessage(errorCode));
         setIsAuthReady(true);
       }
     };
@@ -476,23 +495,31 @@ export default function App() {
     } catch (error) {
       console.error('Owner sign-in error:', error);
       const errorCode = typeof error?.code === 'string' ? error.code : 'auth/unknown';
-      if (['auth/internal-error', 'auth/popup-blocked', 'auth/cancelled-popup-request'].includes(errorCode)) {
-        try {
-          setAuthError('Popup sign-in failed. Redirecting to Google sign-in...');
-          await signInWithRedirect(auth, provider);
-          return;
-        } catch (redirectError) {
-          console.error('Owner redirect sign-in error:', redirectError);
-        }
-      }
-      const codeSpecificMessage = ({
-        'auth/operation-not-allowed': 'Google sign-in is disabled in Firebase Authentication for this project.',
-        'auth/unauthorized-domain': 'This website domain is not in Firebase Authentication authorized domains.',
-        'auth/popup-blocked': 'The browser blocked the sign-in popup. Allow popups for this site and try again.',
-        'auth/popup-closed-by-user': 'The sign-in popup was closed before completing sign-in.'
-      })[errorCode];
-      setAuthError(codeSpecificMessage || `Sign-in failed (${errorCode}).`);
+      setAuthError(getAuthErrorMessage(errorCode));
     } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleOwnerRedirectSignIn = async () => {
+    if (!auth) return;
+    setIsAuthBusy(true);
+    setAuthError('');
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('pending-section-after-auth', 'admin');
+      window.localStorage.setItem(PENDING_OWNER_REDIRECT_KEY, String(Date.now()));
+    }
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithRedirect(auth, provider);
+    } catch (error) {
+      console.error('Owner redirect sign-in error:', error);
+      const errorCode = typeof error?.code === 'string' ? error.code : 'auth/unknown';
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(PENDING_OWNER_REDIRECT_KEY);
+      }
+      setAuthError(getAuthErrorMessage(errorCode));
       setIsAuthBusy(false);
     }
   };
@@ -1010,6 +1037,14 @@ export default function App() {
                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg active:scale-95 disabled:opacity-50"
                       >
                         {isAuthBusy ? 'Signing in...' : (isWrongOwnerAccount ? 'Choose Different Account' : 'Sign in with Google')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOwnerRedirectSignIn}
+                        disabled={isAuthBusy}
+                        className="px-6 py-3 rounded-lg font-medium bg-white/10 border border-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                      >
+                        {isAuthBusy ? 'Please wait...' : 'Use Redirect Sign-in'}
                       </button>
                       {isSignedInUser && (
                         <button

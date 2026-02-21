@@ -44,8 +44,22 @@ import {
 } from 'lucide-react';
 
 // --- SECURITY & EMAIL SETUP ---
-const AUTHORIZED_ID = "05378337030731377140"; 
-const FORM_ENDPOINT = "https://formspree.io/f/meellnpy"; 
+const AUTHORIZED_ID = import.meta.env.VITE_AUTHORIZED_ID ?? "05378337030731377140";
+const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT ?? "https://formspree.io/f/meellnpy";
+const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GCAL_API_KEY ?? "AIzaSyB9RqjMwafHhUQSSuuKbF03zZyjeWdrmK0";
+const GOOGLE_CALENDAR_ID = import.meta.env.VITE_GCAL_ID ?? "qmri04tlb88nhcaqqvu5rbs50s@group.calendar.google.com";
+
+const isSafeExternalUrl = (value) => {
+  if (!value || typeof value !== 'string') return false;
+  try {
+    const parsedUrl = new URL(value);
+    return parsedUrl.protocol === 'https:' || (import.meta.env.DEV && parsedUrl.protocol === 'http:');
+  } catch {
+    return false;
+  }
+};
+
+const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? value : fallback);
 
 // --- PERMANENT VIDEOS LIST ---
 // Update these links and titles whenever you want to feature new content.
@@ -179,10 +193,15 @@ export default function App() {
   };
 
   const isToneShift = ['videos', 'news', 'business', 'admin'].includes(activeSection);
+  const safeVenuePackImageUrl = selectedVenuePackImage ? safeExternalUrl(selectedVenuePackImage.url) : '';
 
   const handleFormSubmit = async (e, formType) => {
     e.preventDefault();
-    if (!FORM_ENDPOINT) return;
+    if (!isSafeExternalUrl(FORM_ENDPOINT)) {
+      setFormStatus('error');
+      setTimeout(() => setFormStatus('idle'), 5000);
+      return;
+    }
     setFormStatus('submitting');
     const formData = new FormData(e.target);
     formData.append('Subject', `New Enquiry: ${formType}`);
@@ -219,16 +238,22 @@ export default function App() {
   const handleSavePost = async (e) => {
     e.preventDefault();
     if (!isOwner || !db) return;
+    const normalizedImageUrl = newPost.img.trim();
+    if (normalizedImageUrl && !isSafeExternalUrl(normalizedImageUrl)) {
+      setFormStatus('error');
+      setTimeout(() => setFormStatus('idle'), 3000);
+      return;
+    }
     try {
       if (newPost.id) {
         const postRef = doc(db, 'artifacts', appId, 'public', 'data', 'blogPosts', newPost.id);
         await updateDoc(postRef, {
-          title: newPost.title, tag: newPost.tag, img: newPost.img, imgHeight: newPost.imgHeight,
+          title: newPost.title, tag: newPost.tag, img: normalizedImageUrl, imgHeight: newPost.imgHeight,
           imgFit: newPost.imgFit, content: newPost.content, date: newPost.date, lastUpdated: new Date().toISOString()
         });
       } else {
         const blogRef = collection(db, 'artifacts', appId, 'public', 'data', 'blogPosts');
-        await addDoc(blogRef, { ...newPost, timestamp: new Date().toISOString() });
+        await addDoc(blogRef, { ...newPost, img: normalizedImageUrl, timestamp: new Date().toISOString() });
       }
       handleCancelEdit();
       setFormStatus('success');
@@ -246,11 +271,15 @@ export default function App() {
   useEffect(() => {
     const fetchGigs = async () => {
       setIsLoadingGigs(true);
-      const apiKey = 'AIzaSyB9RqjMwafHhUQSSuuKbF03zZyjeWdrmK0'; 
-      const calendarId = 'qmri04tlb88nhcaqqvu5rbs50s@group.calendar.google.com';
+      if (!GOOGLE_CALENDAR_API_KEY || !GOOGLE_CALENDAR_ID) {
+        setIsLoadingGigs(false);
+        return;
+      }
       try {
         const now = new Date().toISOString();
-        const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?key=${apiKey}&timeMin=${now}&singleEvents=true&orderBy=startTime&maxResults=50`);
+        const calendarPath = encodeURIComponent(GOOGLE_CALENDAR_ID);
+        const apiKey = encodeURIComponent(GOOGLE_CALENDAR_API_KEY);
+        const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarPath}/events?key=${apiKey}&timeMin=${now}&singleEvents=true&orderBy=startTime&maxResults=50`);
         const data = await response.json();
         if (data.items) {
           setGigs(data.items.map((item, index) => {
@@ -426,16 +455,21 @@ export default function App() {
             ) : (
               <div className="space-y-12">
                 {blogPosts.map((post, idx) => (
-                  <article key={`${post.id}-${idx}`} className="bg-black/60 backdrop-blur-md border border-white/10 p-8 md:p-12 rounded-2xl shadow-xl overflow-hidden flex flex-col items-center text-center">
-                    <div className="flex justify-center gap-3 mb-6"><span className="text-xs font-bold text-blue-400 bg-blue-900/40 px-3 py-1 rounded-full">{post.tag}</span><span className="text-sm text-white/40">{post.date}</span></div>
-                    <h3 className="text-4xl font-bold mb-8 leading-tight max-w-2xl">{post.title}</h3>
-                    {post.img && (
-                      <div className="w-full bg-black/40 rounded-xl mb-10 border border-white/5 flex items-center justify-center overflow-hidden" style={{ height: `${post.imgHeight || 400}px` }}>
-                        <img src={post.img} alt={post.title} className={`w-full h-full ${post.imgFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
-                      </div>
-                    )}
-                    <div className="text-white/70 leading-relaxed whitespace-pre-wrap text-xl font-light max-w-2xl">{post.content}</div>
-                  </article>
+                  (() => {
+                    const safePostImageUrl = safeExternalUrl(post.img);
+                    return (
+                      <article key={`${post.id}-${idx}`} className="bg-black/60 backdrop-blur-md border border-white/10 p-8 md:p-12 rounded-2xl shadow-xl overflow-hidden flex flex-col items-center text-center">
+                        <div className="flex justify-center gap-3 mb-6"><span className="text-xs font-bold text-blue-400 bg-blue-900/40 px-3 py-1 rounded-full">{post.tag}</span><span className="text-sm text-white/40">{post.date}</span></div>
+                        <h3 className="text-4xl font-bold mb-8 leading-tight max-w-2xl">{post.title}</h3>
+                        {safePostImageUrl && (
+                          <div className="w-full bg-black/40 rounded-xl mb-10 border border-white/5 flex items-center justify-center overflow-hidden" style={{ height: `${post.imgHeight || 400}px` }}>
+                            <img src={safePostImageUrl} alt={post.title} className={`w-full h-full ${post.imgFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+                          </div>
+                        )}
+                        <div className="text-white/70 leading-relaxed whitespace-pre-wrap text-xl font-light max-w-2xl">{post.content}</div>
+                      </article>
+                    );
+                  })()
                 ))}
               </div>
             )}
@@ -514,8 +548,8 @@ export default function App() {
                 <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-300">
                   <button onClick={() => setSelectedVenuePackImage(null)} className="absolute -top-12 right-0 text-white/60 hover:text-white transition-colors flex items-center gap-2"><span className="font-medium text-sm">Close</span><X size={24} /></button>
                   <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-3xl">
-                    <div className="overflow-auto bg-black/20 flex justify-center"><img src={selectedVenuePackImage.url} alt={selectedVenuePackImage.title} className="max-w-full h-auto object-contain shadow-2xl" /></div>
-                    <div className="p-6 md:p-8 bg-black/60 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6 text-left"><div><h3 className="text-2xl font-bold text-white mb-1">{selectedVenuePackImage.title}</h3><p className="text-white/40 text-sm font-medium uppercase tracking-widest">{selectedVenuePackImage.type} Material</p></div><a href={selectedVenuePackImage.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95"><Download size={20} />Download Full Size</a></div>
+                    <div className="overflow-auto bg-black/20 flex justify-center">{safeVenuePackImageUrl && <img src={safeVenuePackImageUrl} alt={selectedVenuePackImage.title} className="max-w-full h-auto object-contain shadow-2xl" />}</div>
+                    <div className="p-6 md:p-8 bg-black/60 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6 text-left"><div><h3 className="text-2xl font-bold text-white mb-1">{selectedVenuePackImage.title}</h3><p className="text-white/40 text-sm font-medium uppercase tracking-widest">{selectedVenuePackImage.type} Material</p></div><a href={safeVenuePackImageUrl || '#'} onClick={(e) => !safeVenuePackImageUrl && e.preventDefault()} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95"><Download size={20} />Download Full Size</a></div>
                   </div>
                 </div>
               </div>
@@ -675,20 +709,23 @@ export default function App() {
           <div className="max-w-5xl mx-auto animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-end mb-12 gap-6">
               <img src="https://iili.io/q3ui8a1.png" alt="ToneShift Logo" className="h-16 sm:h-28 object-contain drop-shadow-2xl" />
-              <div className="flex items-center gap-5"><a href="https://youtube.com/@maxmctavish" target="_blank" rel="noopener noreferrer" className="bg-white/10 border border-white/10 px-6 py-2.5 rounded-lg font-medium hover:bg-white/20 transition-colors">Visit Channel</a><a href="https://youtube.com/@maxmctavish?sub_confirmation=1" target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition-transform active:scale-95"><img src="https://iili.io/q3WRHTN.png" alt="Subscribe" className="h-12 shadow-2xl" /></a></div>
+              <div className="flex items-center gap-5"><a href={safeExternalUrl("https://youtube.com/@maxmctavish", "#")} target="_blank" rel="noopener noreferrer" className="bg-white/10 border border-white/10 px-6 py-2.5 rounded-lg font-medium hover:bg-white/20 transition-colors">Visit Channel</a><a href={safeExternalUrl("https://youtube.com/@maxmctavish?sub_confirmation=1", "#")} target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition-transform active:scale-95"><img src="https://iili.io/q3WRHTN.png" alt="Subscribe" className="h-12 shadow-2xl" /></a></div>
             </div>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {videos.map((video, idx) => (
-                <a key={`${video.id}-${idx}`} href={video.url} target="_blank" rel="noopener noreferrer" className="bg-black/60 rounded-xl border border-white/10 group hover:border-blue-500/50 transition-all flex flex-col shadow-xl p-6">
-                  <div className="flex items-start gap-3 mb-4">
-                    <Youtube size={24} className="text-red-500 flex-shrink-0 mt-0.5" />
-                    <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors text-lg leading-snug">{video.title}</h3>
-                  </div>
-                  <p className="text-sm text-white/50 line-clamp-3 mb-6 flex-grow">{video.description}</p>
-                  <div className="text-sm font-bold text-blue-400 flex items-center mt-auto">Watch on YouTube <ChevronRight size={16} className="ml-1" /></div>
-                </a>
-              ))}
+              {videos.map((video, idx) => {
+                const safeVideoUrl = safeExternalUrl(video.url, '#');
+                return (
+                  <a key={`${video.id}-${idx}`} href={safeVideoUrl} onClick={(e) => safeVideoUrl === '#' && e.preventDefault()} target="_blank" rel="noopener noreferrer" className="bg-black/60 rounded-xl border border-white/10 group hover:border-blue-500/50 transition-all flex flex-col shadow-xl p-6">
+                    <div className="flex items-start gap-3 mb-4">
+                      <Youtube size={24} className="text-red-500 flex-shrink-0 mt-0.5" />
+                      <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors text-lg leading-snug">{video.title}</h3>
+                    </div>
+                    <p className="text-sm text-white/50 line-clamp-3 mb-6 flex-grow">{video.description}</p>
+                    <div className="text-sm font-bold text-blue-400 flex items-center mt-auto">Watch on YouTube <ChevronRight size={16} className="ml-1" /></div>
+                  </a>
+                );
+              })}
             </div>
           </div>
         )}

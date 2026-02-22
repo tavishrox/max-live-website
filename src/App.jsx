@@ -716,7 +716,6 @@ export default function App() {
                 <DropdownItem section="videos" label="YouTube" icon={Youtube} />
                 <DropdownItem section="news" label="Guitar Blog" icon={Newspaper} />
                 <DropdownItem section="business" label="Business" icon={Briefcase} />
-                <DropdownItem section="admin" label="Manager" icon={Settings} />
               </div>
             </div>
           </div>
@@ -1171,7 +1170,6 @@ export default function App() {
               <NavItem section="videos" label="YouTube Channel" icon={Youtube} />
               <NavItem section="news" label="Guitar Blog" icon={Newspaper} />
               <NavItem section="business" label="Business Enquiries" icon={Briefcase} />
-              <NavItem section="admin" label="Manager" icon={Settings} />
             </div>
           </div>
         </div>

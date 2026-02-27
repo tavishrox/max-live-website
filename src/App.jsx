@@ -174,13 +174,6 @@ const parseAllOriginsFeed = (payload) => {
   return parseYouTubeFeed(payload.contents);
 };
 
-const formatVideoSyncTime = (value) => {
-  if (!value) return '';
-  const dateValue = new Date(value);
-  if (Number.isNaN(dateValue.getTime())) return '';
-  return dateValue.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-};
-
 // --- PERMANENT VIDEOS LIST ---
 // Update these links and titles whenever you want to feature new content.
 const PERMANENT_VIDEOS = [
@@ -275,7 +268,6 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(!auth);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [videoFeedStatus, setVideoFeedStatus] = useState({ source: 'initial', syncedAt: null });
 
   const [newPost, setNewPost] = useState({
     id: null,
@@ -402,10 +394,6 @@ export default function App() {
             const filteredCachedVideos = cached.videos.filter((video) => !isYouTubeShort(video)).slice(0, 6);
             if (filteredCachedVideos.length > 0) {
               setVideos(filteredCachedVideos);
-              setVideoFeedStatus({
-                source: 'cache',
-                syncedAt: cached?.syncedAt || cached?.createdAt || null
-              });
               hasShownCachedVideos = true;
             }
           }
@@ -438,7 +426,6 @@ export default function App() {
           if (isCancelled) return;
 
           setVideos(latestVideos);
-          setVideoFeedStatus({ source: feedConfig.label, syncedAt: Date.now() });
           try {
             window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
               createdAt: Date.now(),
@@ -461,7 +448,6 @@ export default function App() {
         const filteredFallbackVideos = PERMANENT_VIDEOS.filter((video) => !isYouTubeShort(video)).slice(0, 6);
         if (filteredFallbackVideos.length > 0) {
           setVideos(filteredFallbackVideos);
-          setVideoFeedStatus({ source: 'fallback-static', syncedAt: null });
           hasShownFallbackVideos = true;
         }
       }
@@ -1162,10 +1148,6 @@ export default function App() {
             <div className="flex flex-col sm:flex-row justify-between items-end mb-12 gap-6">
               <div>
                 <img src="https://iili.io/q3ui8a1.png" alt="ToneShift Logo" className="h-16 sm:h-28 object-contain drop-shadow-2xl" />
-                <p className="text-xs text-white/45 mt-2">
-                  Feed: {videoFeedStatus.source}
-                  {videoFeedStatus.syncedAt ? ` • synced ${formatVideoSyncTime(videoFeedStatus.syncedAt)}` : ''}
-                </p>
               </div>
               <div className="flex items-center gap-5"><a href={safeExternalUrl("https://youtube.com/@maxmctavish", "#")} target="_blank" rel="noopener noreferrer" className="bg-white/10 border border-white/10 px-6 py-2.5 rounded-lg font-medium hover:bg-white/20 transition-colors">Visit Channel</a><a href={safeExternalUrl("https://youtube.com/@maxmctavish?sub_confirmation=1", "#")} target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition-transform active:scale-95"><img src="https://iili.io/q3WRHTN.png" alt="Subscribe" className="h-12 shadow-2xl" /></a></div>
             </div>

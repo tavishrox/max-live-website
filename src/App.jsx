@@ -53,7 +53,7 @@ const AUTHORIZED_ID = import.meta.env.VITE_AUTHORIZED_ID ?? "";
 const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT ?? "";
 const GOOGLE_CALENDAR_API_KEY = import.meta.env.VITE_GCAL_API_KEY ?? "";
 const GOOGLE_CALENDAR_ID = import.meta.env.VITE_GCAL_ID ?? "";
-const YOUTUBE_CHANNEL_ID = import.meta.env.VITE_YT_CHANNEL_ID ?? "UC8Fy07TKY0txLxOgj7edHCA";
+const YOUTUBE_CHANNEL_ID = (import.meta.env.VITE_YT_CHANNEL_ID || "UC8Fy07TKY0txLxOgj7edHCA").trim();
 
 const isSafeExternalUrl = (value) => {
   if (!value || typeof value !== 'string') return false;

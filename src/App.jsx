@@ -70,6 +70,7 @@ const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? va
 const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v3';
 const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 2;
 const YOUTUBE_FEED_CACHE_MAX_STALE_MS = 1000 * 60 * 60 * 24;
+const YOUTUBE_FEED_REFRESH_MS = 1000 * 60 * 5;
 const PENDING_OWNER_REDIRECT_KEY = 'pending-owner-auth-redirect';
 const APP_SECTIONS = new Set(['home', 'bio', 'gigs', 'venue-pack', 'bookings', 'videos', 'news', 'business', 'admin']);
 
@@ -168,25 +169,16 @@ const parseYouTubeFeed = (xmlText) => {
   }).filter((video) => Boolean(video.url) && !video.isShort).slice(0, 6);
 };
 
-const parseRss2JsonFeed = (payload) => {
-  if (!payload || payload.status !== 'ok' || !Array.isArray(payload.items)) return [];
-  return payload.items.map((item, index) => {
-    const url = item.link || '';
-    const videoId = extractYouTubeIdFromUrl(url);
-    const title = typeof item.title === 'string' ? item.title.trim() : '';
-    const description = typeof item.description === 'string' ? item.description : '';
-    const thumbnail = item.thumbnail || item?.enclosure?.thumbnail || '';
-    const isShort = isYouTubeShort({ url, title, description });
-    return {
-      id: videoId || item.guid || `rss-video-${index}`,
-      title: title || 'Latest video',
-      description: summarizeVideoDescription(description) || 'Watch the newest upload on YouTube.',
-      videoId,
-      thumbnail,
-      url,
-      isShort
-    };
-  }).filter((video) => Boolean(video.url) && !video.isShort).slice(0, 6);
+const parseAllOriginsFeed = (payload) => {
+  if (!payload || typeof payload.contents !== 'string') return [];
+  return parseYouTubeFeed(payload.contents);
+};
+
+const formatVideoSyncTime = (value) => {
+  if (!value) return '';
+  const dateValue = new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return '';
+  return dateValue.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 };
 
 // --- PERMANENT VIDEOS LIST ---
@@ -283,6 +275,7 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(!auth);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [videoFeedStatus, setVideoFeedStatus] = useState({ source: 'initial', syncedAt: null });
 
   const [newPost, setNewPost] = useState({
     id: null,
@@ -387,9 +380,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (activeSection !== 'videos') return;
     let isCancelled = false;
 
-    const loadLatestVideos = async () => {
+    const loadLatestVideos = async ({ allowStaticFallback = true } = {}) => {
       if (!YOUTUBE_CHANNEL_ID) return;
       let hasShownCachedVideos = false;
       let hasShownFallbackVideos = false;
@@ -408,6 +402,10 @@ export default function App() {
             const filteredCachedVideos = cached.videos.filter((video) => !isYouTubeShort(video)).slice(0, 6);
             if (filteredCachedVideos.length > 0) {
               setVideos(filteredCachedVideos);
+              setVideoFeedStatus({
+                source: 'cache',
+                syncedAt: cached?.syncedAt || cached?.createdAt || null
+              });
               hasShownCachedVideos = true;
             }
           }
@@ -420,27 +418,31 @@ export default function App() {
       const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
       const feedUrlWithBust = `${baseFeedUrl}&_=${cacheBuster}`;
       const xmlFeedUrls = [
-        `https://corsproxy.io/?${encodeURIComponent(feedUrlWithBust)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrlWithBust)}`,
-        feedUrlWithBust
+        { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(feedUrlWithBust)}`, mode: 'xml' },
+        { label: 'allorigins-get', url: `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrlWithBust)}`, mode: 'allorigins-json' },
+        { label: 'allorigins-raw', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrlWithBust)}`, mode: 'xml' },
+        { label: 'youtube-direct', url: feedUrlWithBust, mode: 'xml' }
       ];
 
-      for (const feedUrl of xmlFeedUrls) {
+      for (const feedConfig of xmlFeedUrls) {
         try {
-          const response = await fetch(feedUrl, {
-            headers: { Accept: 'application/atom+xml,text/xml,application/xml,*/*' }
+          const isJsonMode = feedConfig.mode === 'allorigins-json';
+          const response = await fetch(feedConfig.url, {
+            headers: { Accept: isJsonMode ? 'application/json,*/*' : 'application/atom+xml,text/xml,application/xml,*/*' }
           });
           if (!response.ok) continue;
-
-          const feedText = await response.text();
-          const latestVideos = parseYouTubeFeed(feedText);
+          const latestVideos = isJsonMode
+            ? parseAllOriginsFeed(await response.json())
+            : parseYouTubeFeed(await response.text());
           if (latestVideos.length === 0) continue;
           if (isCancelled) return;
 
           setVideos(latestVideos);
+          setVideoFeedStatus({ source: feedConfig.label, syncedAt: Date.now() });
           try {
             window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
               createdAt: Date.now(),
+              syncedAt: Date.now(),
               expiresAt: Date.now() + YOUTUBE_FEED_CACHE_TTL_MS,
               videos: latestVideos
             }));
@@ -453,44 +455,28 @@ export default function App() {
         }
       }
 
-      try {
-        const rss2JsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrlWithBust)}`;
-        const response = await fetch(rss2JsonUrl, { headers: { Accept: 'application/json' } });
-        if (response.ok) {
-          const data = await response.json();
-          const latestVideos = parseRss2JsonFeed(data);
-          if (latestVideos.length > 0 && !isCancelled) {
-            setVideos(latestVideos);
-            try {
-              window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
-                createdAt: Date.now(),
-                expiresAt: Date.now() + YOUTUBE_FEED_CACHE_TTL_MS,
-                videos: latestVideos
-              }));
-            } catch {
-              // Ignore cache write issues.
-            }
-            return;
-          }
-        }
-      } catch {
-        // Ignore rss2json issues and fallback below.
-      }
+      // rss2json endpoint does not reliably provide CORS headers in browsers, so we keep it local-only.
 
-      if (!hasShownCachedVideos && !hasShownFallbackVideos) {
+      if (allowStaticFallback && !hasShownCachedVideos && !hasShownFallbackVideos) {
         const filteredFallbackVideos = PERMANENT_VIDEOS.filter((video) => !isYouTubeShort(video)).slice(0, 6);
         if (filteredFallbackVideos.length > 0) {
           setVideos(filteredFallbackVideos);
+          setVideoFeedStatus({ source: 'fallback-static', syncedAt: null });
           hasShownFallbackVideos = true;
         }
       }
     };
 
     loadLatestVideos();
+    const refreshTimer = window.setInterval(() => {
+      loadLatestVideos({ allowStaticFallback: false });
+    }, YOUTUBE_FEED_REFRESH_MS);
+
     return () => {
       isCancelled = true;
+      window.clearInterval(refreshTimer);
     };
-  }, []);
+  }, [activeSection]);
 
   const venuePackItems = [
     { id: 'vp-1', title: "Promo Shot 1", type: "Poster", url: "https://iili.io/q3vvvsa.jpg", thumb: "https://iili.io/q3vvvsa.jpg" },
@@ -1174,7 +1160,13 @@ export default function App() {
         {activeSection === 'videos' && (
           <div className="max-w-5xl mx-auto animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-end mb-12 gap-6">
-              <img src="https://iili.io/q3ui8a1.png" alt="ToneShift Logo" className="h-16 sm:h-28 object-contain drop-shadow-2xl" />
+              <div>
+                <img src="https://iili.io/q3ui8a1.png" alt="ToneShift Logo" className="h-16 sm:h-28 object-contain drop-shadow-2xl" />
+                <p className="text-xs text-white/45 mt-2">
+                  Feed: {videoFeedStatus.source}
+                  {videoFeedStatus.syncedAt ? ` • synced ${formatVideoSyncTime(videoFeedStatus.syncedAt)}` : ''}
+                </p>
+              </div>
               <div className="flex items-center gap-5"><a href={safeExternalUrl("https://youtube.com/@maxmctavish", "#")} target="_blank" rel="noopener noreferrer" className="bg-white/10 border border-white/10 px-6 py-2.5 rounded-lg font-medium hover:bg-white/20 transition-colors">Visit Channel</a><a href={safeExternalUrl("https://youtube.com/@maxmctavish?sub_confirmation=1", "#")} target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition-transform active:scale-95"><img src="https://iili.io/q3WRHTN.png" alt="Subscribe" className="h-12 shadow-2xl" /></a></div>
             </div>
             

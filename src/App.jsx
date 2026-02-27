@@ -68,7 +68,7 @@ const isSafeExternalUrl = (value) => {
 const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? value : fallback);
 
 const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v3';
-const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 10;
+const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 2;
 const YOUTUBE_FEED_CACHE_MAX_STALE_MS = 1000 * 60 * 60 * 24;
 const PENDING_OWNER_REDIRECT_KEY = 'pending-owner-auth-redirect';
 const APP_SECTIONS = new Set(['home', 'bio', 'gigs', 'venue-pack', 'bookings', 'videos', 'news', 'business', 'admin']);
@@ -409,9 +409,6 @@ export default function App() {
             if (filteredCachedVideos.length > 0) {
               setVideos(filteredCachedVideos);
               hasShownCachedVideos = true;
-              if (cached.expiresAt > Date.now()) {
-                return;
-              }
             }
           }
         }
@@ -419,11 +416,13 @@ export default function App() {
         // Ignore cache read issues and continue with network fetch.
       }
 
+      const cacheBuster = Math.floor(Date.now() / 60000);
       const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
+      const feedUrlWithBust = `${baseFeedUrl}&_=${cacheBuster}`;
       const xmlFeedUrls = [
-        `https://corsproxy.io/?${encodeURIComponent(baseFeedUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(baseFeedUrl)}`,
-        baseFeedUrl
+        `https://corsproxy.io/?${encodeURIComponent(feedUrlWithBust)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrlWithBust)}`,
+        feedUrlWithBust
       ];
 
       for (const feedUrl of xmlFeedUrls) {
@@ -455,7 +454,7 @@ export default function App() {
       }
 
       try {
-        const rss2JsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(baseFeedUrl)}`;
+        const rss2JsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrlWithBust)}`;
         const response = await fetch(rss2JsonUrl, { headers: { Accept: 'application/json' } });
         if (response.ok) {
           const data = await response.json();

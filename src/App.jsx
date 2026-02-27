@@ -67,8 +67,9 @@ const isSafeExternalUrl = (value) => {
 
 const safeExternalUrl = (value, fallback = '') => (isSafeExternalUrl(value) ? value : fallback);
 
-const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v2';
-const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 30;
+const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v3';
+const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 10;
+const YOUTUBE_FEED_CACHE_MAX_STALE_MS = 1000 * 60 * 60 * 24;
 const PENDING_OWNER_REDIRECT_KEY = 'pending-owner-auth-redirect';
 const APP_SECTIONS = new Set(['home', 'bio', 'gigs', 'venue-pack', 'bookings', 'videos', 'news', 'business', 'admin']);
 
@@ -157,6 +158,27 @@ const parseYouTubeFeed = (xmlText) => {
 
     return {
       id: videoId || `feed-video-${index}`,
+      title: title || 'Latest video',
+      description: summarizeVideoDescription(description) || 'Watch the newest upload on YouTube.',
+      videoId,
+      thumbnail,
+      url,
+      isShort
+    };
+  }).filter((video) => Boolean(video.url) && !video.isShort).slice(0, 6);
+};
+
+const parseRss2JsonFeed = (payload) => {
+  if (!payload || payload.status !== 'ok' || !Array.isArray(payload.items)) return [];
+  return payload.items.map((item, index) => {
+    const url = item.link || '';
+    const videoId = extractYouTubeIdFromUrl(url);
+    const title = typeof item.title === 'string' ? item.title.trim() : '';
+    const description = typeof item.description === 'string' ? item.description : '';
+    const thumbnail = item.thumbnail || item?.enclosure?.thumbnail || '';
+    const isShort = isYouTubeShort({ url, title, description });
+    return {
+      id: videoId || item.guid || `rss-video-${index}`,
       title: title || 'Latest video',
       description: summarizeVideoDescription(description) || 'Watch the newest upload on YouTube.',
       videoId,
@@ -369,16 +391,27 @@ export default function App() {
 
     const loadLatestVideos = async () => {
       if (!YOUTUBE_CHANNEL_ID) return;
+      let hasShownCachedVideos = false;
+      let hasShownFallbackVideos = false;
 
       try {
         const cachedRaw = window.localStorage.getItem(YOUTUBE_FEED_CACHE_KEY);
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw);
-          if (cached?.expiresAt > Date.now() && Array.isArray(cached?.videos) && cached.videos.length > 0) {
+          const isCacheUsable =
+            Array.isArray(cached?.videos) &&
+            cached.videos.length > 0 &&
+            Number.isFinite(cached?.createdAt) &&
+            (Date.now() - cached.createdAt) < YOUTUBE_FEED_CACHE_MAX_STALE_MS;
+
+          if (isCacheUsable) {
             const filteredCachedVideos = cached.videos.filter((video) => !isYouTubeShort(video)).slice(0, 6);
             if (filteredCachedVideos.length > 0) {
               setVideos(filteredCachedVideos);
-              return;
+              hasShownCachedVideos = true;
+              if (cached.expiresAt > Date.now()) {
+                return;
+              }
             }
           }
         }
@@ -386,19 +419,14 @@ export default function App() {
         // Ignore cache read issues and continue with network fetch.
       }
 
-      // Keep fallback list short-free too.
-      const filteredFallbackVideos = PERMANENT_VIDEOS.filter((video) => !isYouTubeShort(video)).slice(0, 6);
-      if (filteredFallbackVideos.length > 0) {
-        setVideos(filteredFallbackVideos);
-      }
-
       const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
-      const feedUrls = [
-        baseFeedUrl,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(baseFeedUrl)}`
+      const xmlFeedUrls = [
+        `https://corsproxy.io/?${encodeURIComponent(baseFeedUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(baseFeedUrl)}`,
+        baseFeedUrl
       ];
 
-      for (const feedUrl of feedUrls) {
+      for (const feedUrl of xmlFeedUrls) {
         try {
           const response = await fetch(feedUrl, {
             headers: { Accept: 'application/atom+xml,text/xml,application/xml,*/*' }
@@ -413,6 +441,7 @@ export default function App() {
           setVideos(latestVideos);
           try {
             window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
+              createdAt: Date.now(),
               expiresAt: Date.now() + YOUTUBE_FEED_CACHE_TTL_MS,
               videos: latestVideos
             }));
@@ -422,6 +451,38 @@ export default function App() {
           return;
         } catch {
           // Try next feed endpoint.
+        }
+      }
+
+      try {
+        const rss2JsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(baseFeedUrl)}`;
+        const response = await fetch(rss2JsonUrl, { headers: { Accept: 'application/json' } });
+        if (response.ok) {
+          const data = await response.json();
+          const latestVideos = parseRss2JsonFeed(data);
+          if (latestVideos.length > 0 && !isCancelled) {
+            setVideos(latestVideos);
+            try {
+              window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
+                createdAt: Date.now(),
+                expiresAt: Date.now() + YOUTUBE_FEED_CACHE_TTL_MS,
+                videos: latestVideos
+              }));
+            } catch {
+              // Ignore cache write issues.
+            }
+            return;
+          }
+        }
+      } catch {
+        // Ignore rss2json issues and fallback below.
+      }
+
+      if (!hasShownCachedVideos && !hasShownFallbackVideos) {
+        const filteredFallbackVideos = PERMANENT_VIDEOS.filter((video) => !isYouTubeShort(video)).slice(0, 6);
+        if (filteredFallbackVideos.length > 0) {
+          setVideos(filteredFallbackVideos);
+          hasShownFallbackVideos = true;
         }
       }
     };

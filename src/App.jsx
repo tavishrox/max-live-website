@@ -372,7 +372,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (activeSection !== 'videos') return;
     let isCancelled = false;
 
     const loadLatestVideos = async ({ allowStaticFallback = true } = {}) => {
@@ -453,14 +452,19 @@ export default function App() {
       }
     };
 
+    // Refresh once on every app load so the latest uploads are ready before the user opens Videos.
     loadLatestVideos();
-    const refreshTimer = window.setInterval(() => {
-      loadLatestVideos({ allowStaticFallback: false });
-    }, YOUTUBE_FEED_REFRESH_MS);
+    const refreshTimer = activeSection === 'videos'
+      ? window.setInterval(() => {
+          loadLatestVideos({ allowStaticFallback: false });
+        }, YOUTUBE_FEED_REFRESH_MS)
+      : null;
 
     return () => {
       isCancelled = true;
-      window.clearInterval(refreshTimer);
+      if (refreshTimer) {
+        window.clearInterval(refreshTimer);
+      }
     };
   }, [activeSection]);
 

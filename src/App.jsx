@@ -174,6 +174,25 @@ const parseAllOriginsFeed = (payload) => {
   return parseYouTubeFeed(payload.contents);
 };
 
+const getCachedYouTubeVideos = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const cachedRaw = window.localStorage.getItem(YOUTUBE_FEED_CACHE_KEY);
+    if (!cachedRaw) return [];
+    const cached = JSON.parse(cachedRaw);
+    const isCacheUsable =
+      Array.isArray(cached?.videos) &&
+      cached.videos.length > 0 &&
+      Number.isFinite(cached?.createdAt) &&
+      (Date.now() - cached.createdAt) < YOUTUBE_FEED_CACHE_MAX_STALE_MS;
+
+    if (!isCacheUsable) return [];
+    return cached.videos.filter((video) => !isYouTubeShort(video)).slice(0, 6);
+  } catch {
+    return [];
+  }
+};
+
 // --- PERMANENT VIDEOS LIST ---
 // Update these links and titles whenever you want to feature new content.
 const PERMANENT_VIDEOS = [
@@ -256,7 +275,8 @@ export default function App() {
   
   const [gigs, setGigs] = useState([]);
   const [isLoadingGigs, setIsLoadingGigs] = useState(true);
-  const [videos, setVideos] = useState(PERMANENT_VIDEOS);
+  const [videos, setVideos] = useState(getCachedYouTubeVideos);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(() => getCachedYouTubeVideos().length === 0);
   
   const [blogPosts, setBlogPosts] = useState([]);
   const [visibleGigsCount, setVisibleGigsCount] = useState(6);
@@ -375,7 +395,10 @@ export default function App() {
     let isCancelled = false;
 
     const loadLatestVideos = async ({ allowStaticFallback = true } = {}) => {
-      if (!YOUTUBE_CHANNEL_ID) return;
+      if (!YOUTUBE_CHANNEL_ID) {
+        setIsLoadingVideos(false);
+        return;
+      }
       let hasShownCachedVideos = false;
       let hasShownFallbackVideos = false;
 
@@ -425,6 +448,7 @@ export default function App() {
           if (isCancelled) return;
 
           setVideos(latestVideos);
+          setIsLoadingVideos(false);
           try {
             window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
               createdAt: Date.now(),
@@ -447,8 +471,13 @@ export default function App() {
         const filteredFallbackVideos = PERMANENT_VIDEOS.filter((video) => !isYouTubeShort(video)).slice(0, 6);
         if (filteredFallbackVideos.length > 0) {
           setVideos(filteredFallbackVideos);
+          setIsLoadingVideos(false);
           hasShownFallbackVideos = true;
         }
+      }
+
+      if (!isCancelled) {
+        setIsLoadingVideos(false);
       }
     };
 
@@ -1156,38 +1185,44 @@ export default function App() {
               <div className="flex items-center gap-5"><a href={safeExternalUrl("https://youtube.com/@maxmctavish", "#")} target="_blank" rel="noopener noreferrer" className="bg-white/10 border border-white/10 px-6 py-2.5 rounded-lg font-medium hover:bg-white/20 transition-colors">Visit Channel</a><a href={safeExternalUrl("https://youtube.com/@maxmctavish?sub_confirmation=1", "#")} target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition-transform active:scale-95"><img src="https://iili.io/q3WRHTN.png" alt="Subscribe" className="h-12 shadow-2xl" /></a></div>
             </div>
             
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {videos.filter((video) => !isYouTubeShort(video)).slice(0, 6).map((video, idx) => {
-                const safeVideoUrl = safeExternalUrl(video.url, '#');
-                const safeThumbnailUrl = safeExternalUrl(getVideoThumbnailUrl(video));
-                return (
-                  <a key={`${video.id}-${idx}`} href={safeVideoUrl} onClick={(e) => safeVideoUrl === '#' && e.preventDefault()} target="_blank" rel="noopener noreferrer" className="bg-black/60 rounded-xl border border-white/10 group hover:border-blue-500/50 transition-all flex flex-col shadow-xl p-6">
-                    <div className="mb-4 -mx-1 rounded-lg overflow-hidden border border-white/10 bg-black/30 relative">
-                      {safeThumbnailUrl ? (
-                        <img src={safeThumbnailUrl} alt={video.title} loading="lazy" className="w-full aspect-video object-cover group-hover:scale-[1.02] transition-transform duration-300" />
-                      ) : (
-                        <div className="w-full aspect-video flex items-center justify-center bg-black/50">
-                          <Youtube size={36} className="text-red-500/80" />
+            {isLoadingVideos && videos.length === 0 ? (
+              <div className="bg-black/50 border border-white/10 rounded-2xl p-10 text-center text-white/55">
+                Loading latest uploads...
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {videos.filter((video) => !isYouTubeShort(video)).slice(0, 6).map((video, idx) => {
+                  const safeVideoUrl = safeExternalUrl(video.url, '#');
+                  const safeThumbnailUrl = safeExternalUrl(getVideoThumbnailUrl(video));
+                  return (
+                    <a key={`${video.id}-${idx}`} href={safeVideoUrl} onClick={(e) => safeVideoUrl === '#' && e.preventDefault()} target="_blank" rel="noopener noreferrer" className="bg-black/60 rounded-xl border border-white/10 group hover:border-blue-500/50 transition-all flex flex-col shadow-xl p-6">
+                      <div className="mb-4 -mx-1 rounded-lg overflow-hidden border border-white/10 bg-black/30 relative">
+                        {safeThumbnailUrl ? (
+                          <img src={safeThumbnailUrl} alt={video.title} loading="lazy" className="w-full aspect-video object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                        ) : (
+                          <div className="w-full aspect-video flex items-center justify-center bg-black/50">
+                            <Youtube size={36} className="text-red-500/80" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-black/35 border border-white/15 text-white/90 text-xs font-medium backdrop-blur-sm group-hover:scale-105 transition-transform">
+                            <PlayCircle size={14} className="text-blue-300" />
+                            Watch now
+                          </span>
                         </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-black/35 border border-white/15 text-white/90 text-xs font-medium backdrop-blur-sm group-hover:scale-105 transition-transform">
-                          <PlayCircle size={14} className="text-blue-300" />
-                          Watch now
-                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-3 mb-4">
-                      <Youtube size={24} className="text-red-500 flex-shrink-0 mt-0.5" />
-                      <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors text-lg leading-snug">{video.title}</h3>
-                    </div>
-                    <p className="text-sm text-white/50 line-clamp-3 mb-6 flex-grow">{video.description}</p>
-                    <div className="text-sm font-bold text-blue-400 flex items-center mt-auto">Watch on YouTube <ChevronRight size={16} className="ml-1" /></div>
-                  </a>
-                );
-              })}
-            </div>
+                      <div className="flex items-start gap-3 mb-4">
+                        <Youtube size={24} className="text-red-500 flex-shrink-0 mt-0.5" />
+                        <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors text-lg leading-snug">{video.title}</h3>
+                      </div>
+                      <p className="text-sm text-white/50 line-clamp-3 mb-6 flex-grow">{video.description}</p>
+                      <div className="text-sm font-bold text-blue-400 flex items-center mt-auto">Watch on YouTube <ChevronRight size={16} className="ml-1" /></div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </main>

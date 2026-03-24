@@ -71,6 +71,7 @@ const YOUTUBE_FEED_CACHE_KEY = 'yt-latest-videos-cache-v3';
 const YOUTUBE_FEED_CACHE_TTL_MS = 1000 * 60 * 2;
 const YOUTUBE_FEED_CACHE_MAX_STALE_MS = 1000 * 60 * 60 * 24;
 const YOUTUBE_FEED_REFRESH_MS = 1000 * 60 * 5;
+const YOUTUBE_FEED_REQUEST_TIMEOUT_MS = 4000;
 const PENDING_OWNER_REDIRECT_KEY = 'pending-owner-auth-redirect';
 const APP_SECTIONS = new Set(['home', 'bio', 'gigs', 'venue-pack', 'bookings', 'videos', 'news', 'business', 'admin']);
 
@@ -172,6 +173,17 @@ const parseYouTubeFeed = (xmlText) => {
 const parseAllOriginsFeed = (payload) => {
   if (!payload || typeof payload.contents !== 'string') return [];
   return parseYouTubeFeed(payload.contents);
+};
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = YOUTUBE_FEED_REQUEST_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 };
 
 const getCachedYouTubeVideos = () => {
@@ -428,8 +440,8 @@ export default function App() {
       const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
       const feedUrlWithBust = `${baseFeedUrl}&_=${cacheBuster}`;
       const xmlFeedUrls = [
-        { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(feedUrlWithBust)}`, mode: 'xml' },
         { label: 'allorigins-get', url: `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrlWithBust)}`, mode: 'allorigins-json' },
+        { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(feedUrlWithBust)}`, mode: 'xml' },
         { label: 'allorigins-raw', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrlWithBust)}`, mode: 'xml' },
         { label: 'youtube-direct', url: feedUrlWithBust, mode: 'xml' }
       ];
@@ -437,7 +449,7 @@ export default function App() {
       for (const feedConfig of xmlFeedUrls) {
         try {
           const isJsonMode = feedConfig.mode === 'allorigins-json';
-          const response = await fetch(feedConfig.url, {
+          const response = await fetchWithTimeout(feedConfig.url, {
             headers: { Accept: isJsonMode ? 'application/json,*/*' : 'application/atom+xml,text/xml,application/xml,*/*' }
           });
           if (!response.ok) continue;

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "generate:youtube-feed": "node scripts/generate-youtube-feed.mjs",
     "lint": "eslint .",
     "test:firestore-rules": "firebase emulators:exec --only firestore \"node scripts/test-firestore-rules.mjs\"",
     "preview": "vite preview"

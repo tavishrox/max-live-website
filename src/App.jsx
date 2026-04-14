@@ -175,6 +175,11 @@ const parseAllOriginsFeed = (payload) => {
   return parseYouTubeFeed(payload.contents);
 };
 
+const parseStaticYouTubeFeed = (payload) => {
+  if (!payload || !Array.isArray(payload.videos)) return [];
+  return payload.videos.filter((video) => !isYouTubeShort(video)).slice(0, 6);
+};
+
 const fetchWithTimeout = async (url, options = {}, timeoutMs = YOUTUBE_FEED_REQUEST_TIMEOUT_MS) => {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -439,6 +444,31 @@ export default function App() {
       const cacheBuster = Math.floor(Date.now() / 60000);
       const baseFeedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
       const feedUrlWithBust = `${baseFeedUrl}&_=${cacheBuster}`;
+      const sameOriginFeedUrl = new URL('youtube-videos.json', window.location.href);
+      sameOriginFeedUrl.searchParams.set('_', String(cacheBuster));
+
+      try {
+        const response = await fetchWithTimeout(sameOriginFeedUrl.toString(), {
+          headers: { Accept: 'application/json,*/*' }
+        });
+        if (response.ok) {
+          const latestVideos = parseStaticYouTubeFeed(await response.json());
+          if (latestVideos.length > 0 && !isCancelled) {
+            setVideos(latestVideos);
+            setIsLoadingVideos(false);
+            window.localStorage.setItem(YOUTUBE_FEED_CACHE_KEY, JSON.stringify({
+              createdAt: Date.now(),
+              syncedAt: Date.now(),
+              expiresAt: Date.now() + YOUTUBE_FEED_CACHE_TTL_MS,
+              videos: latestVideos
+            }));
+            return;
+          }
+        }
+      } catch {
+        // Fall through to external RSS proxies.
+      }
+
       const xmlFeedUrls = [
         { label: 'allorigins-get', url: `https://api.allorigins.win/get?url=${encodeURIComponent(feedUrlWithBust)}`, mode: 'allorigins-json' },
         { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(feedUrlWithBust)}`, mode: 'xml' },

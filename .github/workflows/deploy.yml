@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
@@ -54,6 +56,9 @@ jobs:
 
       - name: Verify Firestore Rules
         run: npm run test:firestore-rules
+
+      - name: Generate YouTube feed
+        run: npm run generate:youtube-feed
 
       - name: Build site
         run: npm run build

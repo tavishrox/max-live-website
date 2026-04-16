@@ -1,10 +1,12 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_CHANNEL_ID = 'UC8Fy07TKY0txLxOgj7edHCA';
-const CHANNEL_ID = (process.env.VITE_YT_CHANNEL_ID || DEFAULT_CHANNEL_ID).trim();
+const CHANNEL_ID = (process.env.VITE_YT_CHANNEL_ID || '').trim() || DEFAULT_CHANNEL_ID;
 const OUTPUT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../public/youtube-videos.json');
+const MAX_FETCH_ATTEMPTS = 3;
+const FETCH_TIMEOUT_MS = 10000;
 
 const decodeHtml = (value = '') => value
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -68,18 +70,85 @@ const parseVideos = (xmlText) => {
   }).filter((video) => video.url && !isShort(video)).slice(0, 6);
 };
 
-const response = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(CHANNEL_ID)}`, {
-  headers: { Accept: 'application/atom+xml,text/xml,application/xml,*/*' }
+const readExistingFeed = async () => {
+  try {
+    const existingFeed = JSON.parse(await readFile(OUTPUT_PATH, 'utf8'));
+    if (Array.isArray(existingFeed?.videos) && existingFeed.videos.length > 0) {
+      return existingFeed;
+    }
+  } catch {
+    // No valid previous feed exists.
+  }
+  return null;
+};
+
+const sleep = (durationMs) => new Promise((resolveSleep) => {
+  setTimeout(resolveSleep, durationMs);
 });
 
-if (!response.ok) {
-  throw new Error(`YouTube RSS fetch failed: ${response.status}`);
-}
+const fetchWithTimeout = async (url) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-const videos = parseVideos(await response.text());
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/atom+xml,text/xml,application/xml,*/*',
+        'User-Agent': 'max-mctavish-website-feed-generator/1.0'
+      }
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
-if (videos.length === 0) {
-  throw new Error('YouTube RSS fetch returned no usable videos');
+const fetchYouTubeFeed = async () => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const feedUrl = new URL('https://www.youtube.com/feeds/videos.xml');
+      feedUrl.searchParams.set('channel_id', CHANNEL_ID);
+      feedUrl.searchParams.set('_', `${Date.now()}-${attempt}`);
+
+      const response = await fetchWithTimeout(feedUrl.toString());
+
+      if (!response.ok) {
+        throw new Error(`YouTube RSS fetch failed: ${response.status}`);
+      }
+
+      const videos = parseVideos(await response.text());
+
+      if (videos.length === 0) {
+        throw new Error('YouTube RSS fetch returned no usable videos');
+      }
+
+      return videos;
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_FETCH_ATTEMPTS) {
+        await sleep(attempt * 1500);
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+let videos;
+
+try {
+  videos = await fetchYouTubeFeed();
+} catch (error) {
+  const existingFeed = await readExistingFeed();
+
+  if (!existingFeed) {
+    throw error;
+  }
+
+  videos = existingFeed.videos;
+  console.warn(`YouTube RSS fetch failed; using existing feed from ${existingFeed.generatedAt}. ${error.message}`);
 }
 
 await mkdir(dirname(OUTPUT_PATH), { recursive: true });

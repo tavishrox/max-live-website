@@ -323,7 +323,7 @@ export default function App() {
   const isOwner = Boolean(
     user &&
     !user.isAnonymous &&
-    (ownerId === '' || user.uid === ownerId || googleProviderUid === ownerId)
+    (ownerId && (user.uid === ownerId || googleProviderUid === ownerId))
   );
   const isWrongOwnerAccount = Boolean(
     isSignedInUser &&
@@ -542,7 +542,7 @@ export default function App() {
   const venuePackItems = [
     { id: 'vp-1', title: "Promo Shot 1", type: "Poster", url: "https://iili.io/q3vvvsa.jpg", thumb: "https://iili.io/q3vvvsa.jpg" },
     { id: 'vp-2', title: "Promo Shot 2", type: "Photography", url: "https://iili.io/q3YTmYb.png", thumb: "https://iili.io/q3YTmYb.png" },
-    { id: 'vp-3', title: "Live Action", type: "Photography", url: "https://iili.io/q3uogY7.jpg", thumb: "https://iili.io/q3uogY7.jpg" }
+    { id: 'vp-3', title: "Live Action", type: "Photography", url: "/max-live.jpg", thumb: "/max-live.jpg" }
   ];
 
   const navigateTo = (section) => {
@@ -557,7 +557,6 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  const isToneShift = ['videos', 'news', 'business', 'admin'].includes(activeSection);
   const allGigs = [...gigs].sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
   const safeVenuePackImageUrl = selectedVenuePackImage ? safeExternalUrl(selectedVenuePackImage.url) : '';
 
@@ -779,96 +778,24 @@ export default function App() {
 
   return (
     <div className="min-h-screen font-sans relative z-0 text-white selection:bg-blue-500/30">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playwrite+AU+SA:wght@100..400&display=swap');`}</style>
-      
-      <div className="fixed inset-0 z-[-1] pointer-events-none">
-        <div className={`absolute inset-0 transition-opacity duration-700 ${isToneShift ? 'opacity-0' : 'opacity-100'}`}>
-          <div className="absolute inset-0 bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('https://iili.io/q3VBxCQ.jpg')" }} />
-          <div className="absolute inset-0 bg-black/80" />
-        </div>
-        <div className={`absolute inset-0 transition-opacity duration-700 ${isToneShift ? 'opacity-100' : 'opacity-0'}`}>
-          <div className="absolute inset-0 bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('https://iili.io/q3h4tyX.png')" }} />
-          <div className="absolute inset-0 bg-black/90" />
-        </div>
-      </div>
-
-      <nav className="border-b sticky top-0 z-50 bg-black/50 border-white/10 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center relative">
-          <div className="hidden lg:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-0.5 bg-white/30 shadow-[0_0_14px_rgba(255,255,255,0.28)] pointer-events-none"></div>
-          <div className="hidden lg:flex items-center gap-3">
-            <button className="text-white font-normal text-3xl tracking-wide drop-shadow-lg" style={{ fontFamily: "'Playwrite AU SA', cursive" }} onClick={() => navigateTo('home')}>
-              Max McTavish
-            </button>
-            <span className="text-white/20 text-xl font-bold">|</span>
-            <div className="relative group">
-              <button className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${!isToneShift && activeSection !== 'home' ? 'bg-blue-600 text-white' : 'text-white/80 hover:bg-white/10'}`}>
-                Max Live <ChevronDown size={14} className="group-hover:rotate-180 transition-transform" />
-              </button>
-              <div className="absolute top-full left-0 mt-2 w-48 rounded-xl border border-white/10 bg-black/90 backdrop-blur-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden shadow-2xl">
-                <DropdownItem section="bio" label="About Max" icon={User} />
-                <DropdownItem section="gigs" label="Upcoming Gigs" icon={CalendarDays} />
-                <DropdownItem section="venue-pack" label="Venue Pack" icon={Download} />
-                <DropdownItem section="bookings" label="Bookings" icon={Mail} />
-              </div>
-            </div>
-          </div>
-
-          <div className="hidden lg:flex items-center gap-4">
-            <img src="https://iili.io/q3ui8a1.png" alt="ToneShift" className="h-10 w-auto object-contain cursor-pointer" onClick={() => navigateTo('videos')} />
-            <div className="relative group">
-              <button className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${isToneShift && activeSection !== 'home' ? 'bg-blue-600 text-white' : 'text-white/80 hover:bg-white/10'}`}>
-                ToneShift <ChevronDown size={14} className="group-hover:rotate-180 transition-transform" />
-              </button>
-              <div className="absolute top-full right-0 mt-2 w-48 rounded-xl border border-white/10 bg-black/90 backdrop-blur-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden shadow-2xl">
-                <DropdownItem section="videos" label="YouTube" icon={Youtube} />
-                <DropdownItem section="news" label="Guitar Blog" icon={Newspaper} />
-                <DropdownItem section="business" label="Business" icon={Briefcase} />
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:hidden cursor-pointer flex items-center gap-3" onClick={() => navigateTo('home')}>
-            <span className="text-white font-normal text-2xl md:text-3xl tracking-wide drop-shadow-lg" style={{ fontFamily: "'Playwrite AU SA', cursive" }}>Max McTavish</span>
-            <span className="text-white/20 text-xl font-bold">|</span>
-            <img src="https://iili.io/q3ui8a1.png" alt="ToneShift" className="h-8 md:h-10 w-auto object-contain" />
-          </div>
-          <button className="lg:hidden p-2 text-white" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle Menu">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </nav>
-
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* HOME SECTION */}
-        {activeSection === 'home' && (
-          <div className="space-y-12">
-            <section className="text-center py-12 md:py-20 animate-in fade-in slide-in-from-top-4 duration-700">
-              <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 text-white drop-shadow-md">Live Music & Guitar Technology</h1>
-              <p className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed">Welcome. I'm Max, a live performing guitarist and singer. I also run ToneShift, where we dive deep into guitar gear, digital modellers, and tone creation.</p>
-            </section>
-            
-            <div className="grid md:grid-cols-2 gap-8 items-stretch">
-              <div onClick={() => navigateTo('gigs')} className="bg-black/50 backdrop-blur-md border border-white/10 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-black/70 transition-all group overflow-hidden flex flex-col shadow-2xl">
-                <div className="h-56 relative overflow-hidden">
-                  <img src="https://iili.io/q3uogY7.jpg" alt="Max Live Performance" className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500 opacity-80" />
-                </div>
-                <div className="p-8 pt-6 flex-grow flex flex-col relative z-20">
-                  <div className="flex items-center gap-3 mb-4"><Mic2 size={24} className="text-blue-400" /><h2 className="text-2xl font-bold text-white">Max Live Performance</h2></div>
-                  <p className="text-white/60 mb-8 min-h-[64px] flex-grow">UK Based Guitar Vocalist hits from 60s on.....<br /> Find out where I'm playing next.</p>
-                  <div className="flex items-center text-sm font-semibold text-blue-400 mt-auto">View upcoming gigs <ChevronRight size={16} className="ml-1" /></div>
-                </div>
-              </div>
-              <div onClick={() => navigateTo('videos')} className="bg-black/70 backdrop-blur-md border border-white/10 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-black/80 transition-all group overflow-hidden flex flex-col shadow-2xl">
-                <div className="h-56 relative overflow-hidden flex items-center justify-center bg-white/5"><img src="https://iili.io/q3ui8a1.png" alt="ToneShift Logo" className="h-24 object-contain drop-shadow-2xl relative z-20 group-hover:scale-105 transition-transform duration-500" /></div>
-                <div className="p-8 pt-6 flex-grow flex flex-col relative z-20">
-                  <div className="flex items-center gap-3 mb-4"><Youtube size={24} className="text-blue-400" /><h2 className="text-2xl font-bold text-white">ToneShift Channel</h2></div>
-                  <p className="text-white/60 mb-8 min-h-[64px] flex-grow">Guitar tech, amp modellers, and gear reviews. Check out the newest content on the channel.</p>
-                  <div className="flex items-center text-sm font-semibold text-blue-400 mt-auto">Watch videos <ChevronRight size={16} className="ml-1" /></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+      <a href="#main-content" className="skip-link">Skip to content</a>
+      <header className="neon-header">
+        <button className="neon-brand" onClick={() => navigateTo('home')}>Max McTavish</button>
+        <nav className="neon-nav" aria-label="Main navigation">
+          {[['gigs','Gigs'],['bio','About'],['videos','ToneShift'],['bookings','Bookings']].map(([id,label]) => <button key={id} aria-current={activeSection===id?'page':undefined} onClick={() => navigateTo(id)}>{label}</button>)}
+        </nav>
+      </header>
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8">
+        {activeSection === 'home' && <div className="neon-home">
+          <section className="neon-hero">
+            <div className="hero-copy"><p className="eyebrow">LIVE GUITAR / POWERFUL VOCALS</p><h1>MAX<br/>McTAVISH</h1><p className="neon-script">Turn up the night.</p><p className="hero-description">Pop, rock and timeless classics.<br/>Find a show. Bring your friends.<br/>I’ll bring the music.</p><div className="neon-actions"><button className="neon-button primary" onClick={() => navigateTo('gigs')}>Find a gig <CalendarDays size={18}/></button><button className="neon-button" onClick={() => navigateTo('videos')}>Explore ToneShift</button></div></div>
+            <figure className="hero-photo"><img src="/max-live.jpg" alt="Max playing electric guitar under pink and blue lighting" fetchPriority="high"/><figcaption>MAX LIVE <span>GUITAR & VOCALS</span></figcaption></figure>
+          </section>
+          <section className="home-gigs"><div className="section-heading"><div><p className="eyebrow">SEE YOU AT THE SHOW</p><h2>UPCOMING GIGS</h2></div><button className="text-link" onClick={() => navigateTo('gigs')}>Full gig calendar <ChevronRight size={18}/></button></div>
+            {isLoadingGigs ? <p role="status">Loading upcoming gigs…</p> : allGigs.length ? allGigs.slice(0,3).map(gig => <button key={gig.id} className="neon-gig" onClick={() => {navigateTo('gigs');setSelectedGig(gig)}}><span className="gig-date">{gig.date}</span><span className="gig-venue">{gig.venue}<small>{gig.location}</small></span><span>{gig.time}</span><ChevronRight size={20}/></button>) : <div className="empty-gigs"><p>Dates are unavailable right now. Please get in touch for upcoming shows.</p><button className="neon-button" onClick={() => navigateTo('bookings')}>Ask about a show</button></div>}
+          </section>
+          <div className="home-split"><section className="home-about"><p className="eyebrow">BEHIND THE MUSIC</p><h2>BIG SOUND.<br/>GOOD COMPANY.</h2><p>I’m Max, a UK-based guitar vocalist. Live guitar, powerful vocals and professionally produced backing tracks bring the songs you know to life.</p><p>From a relaxed early evening to a full dance floor, I shape the show around the room.</p><button className="neon-button" onClick={() => navigateTo('bio')}>More about Max</button></section><section className="home-tone"><p className="eyebrow">GEAR / TONE / GIG LIFE</p><h2 className="neon-script">ToneShift</h2><p>Great gear. Better tone.<br/>Real experience from the stage.</p>{(videos.length ? videos : PERMANENT_VIDEOS).slice(0,1).map(video => <a className="featured-video" key={video.id} href={safeExternalUrl(video.url,'#')} target="_blank" rel="noopener noreferrer"><img src={getVideoThumbnailUrl(video)} alt="" loading="lazy"/><span>{video.title}<small>Watch on YouTube ↗</small></span></a>)}<button className="text-link" onClick={() => navigateTo('videos')}>Explore the channel <ChevronRight size={18}/></button></section></div>
+        </div>}
 
         {/* GUITAR BLOG SECTION */}
         {activeSection === 'news' && (
@@ -912,7 +839,7 @@ export default function App() {
           <div className="max-w-4xl mx-auto animate-in fade-in duration-500">
             <h2 className="text-3xl font-bold mb-8 flex items-center gap-3"><User className="text-white/40" /> About Max</h2>
             <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl flex flex-col md:flex-row overflow-hidden shadow-2xl items-stretch">
-              <div className="md:w-1/3 flex-shrink-0"><img src="https://iili.io/q3uogY7.jpg" alt="Max McTavish" className="w-full h-full object-cover min-h-[300px]" /></div>
+              <div className="md:w-1/3 flex-shrink-0"><img src="/max-live.jpg" alt="Max McTavish" className="w-full h-full object-cover min-h-[300px]" /></div>
               <div className="p-8 text-lg text-white/80 space-y-4 leading-relaxed">
                 <p className="font-bold text-white text-xl">Max McTavish brings a big sound to the stage.</p>
                 <p>Blending live guitar and powerful vocals with professionally produced backing tracks, he delivers the impact and energy of a full band in a streamlined, reliable format.</p>
@@ -948,6 +875,7 @@ export default function App() {
                 </div>
                 {isLoadingGigs ? <div className="text-white/40 text-center py-8">Loading gigs...</div> : showCalendar ? renderCalendar() : (
                   <div className="space-y-4">
+                    {allGigs.length === 0 && <p role="status" className="empty-gigs">Dates are unavailable right now. Please use Bookings to ask about upcoming shows.</p>}
                     {allGigs.slice(0, visibleGigsCount).map((gig, idx) => (
                       <button key={`${gig.id}-${idx}`} onClick={() => setSelectedGig(gig)} className="w-full text-left bg-black/60 backdrop-blur-md border border-white/10 p-6 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl hover:bg-black/80 hover:border-blue-500/30 transition-all group">
                         <div><div className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{gig.venue}</div><div className="text-white/40 flex items-center gap-2"><MapPin size={16} className="text-blue-400/50" /> {gig.location}</div></div>
@@ -1268,6 +1196,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <footer className="neon-footer"><button className="neon-brand" onClick={() => navigateTo('home')}>Max McTavish</button><nav aria-label="More pages">{[['venue-pack','Venue pack'],['news','Guitar blog'],['business','Business enquiries'],['admin','Manager']].map(([id,label]) => <button key={id} onClick={() => navigateTo(id)}>{label}</button>)}</nav><span>Live music. Great tone.</span></footer>
 
       {/* Mobile Sidebar Navigation */}
       {isMobileMenuOpen && (

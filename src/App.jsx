@@ -1172,22 +1172,6 @@ export default function App() {
                   </div>
                   <p className="text-xs text-white/40 mt-5">Unofficial and experimental: not made or supported by Line 6. Installing modified firmware is at your own risk.</p>
                 </div>
-                <div className="bg-black/60 border border-white/10 rounded-xl p-6 flex flex-col">
-                  <p className="eyebrow">POD GO · HELIX · HX EFFECTS</p>
-                  <h3 className="text-3xl font-bold mb-3">MORF-X</h3>
-                  <p className="text-white/70 mb-5 flex-grow">Blend a block between five tones on an X-Y pad, live, over USB. Find your tone by moving through it.</p>
-                  <div className="neon-actions" style={{ marginTop: 0 }}>
-                    <a className="neon-button primary" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/morph.html" target="_blank" rel="noopener noreferrer">Open MORF-X <ExternalLink size={16} /></a>
-                  </div>
-                </div>
-                <div className="bg-black/60 border border-white/10 rounded-xl p-6 flex flex-col">
-                  <p className="eyebrow">POD GO</p>
-                  <h3 className="text-3xl font-bold mb-3">POD Go Companion</h3>
-                  <p className="text-white/70 mb-5 flex-grow">Back up and restore your POD Go presets from the browser, including snapshots 5 and 6 with the six-snapshot firmware, plus snapshot names and colours.</p>
-                  <div className="neon-actions" style={{ marginTop: 0 }}>
-                    <a className="neon-button primary" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/companion.html" target="_blank" rel="noopener noreferrer">Open the Companion <ExternalLink size={16} /></a>
-                  </div>
-                </div>
               </div>
             </section>
 

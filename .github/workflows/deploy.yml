@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "29 7 * * *"
 
 permissions:
   contents: read
@@ -92,3 +92,31 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  keep-schedule-active:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - name: Keep the scheduled workflow active
+        shell: bash
+        run: |
+          # GitHub may disable scheduled workflows after 60 days without repository activity.
+          # Make a small repository activity commit no more than once every 30 days.
+          last_commit=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if (( now - last_commit < 30 * 24 * 60 * 60 )); then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/youtube-feed-heartbeat
+          git add .github/youtube-feed-heartbeat
+          git commit -m "chore: keep scheduled YouTube updates active"
+          git push

@@ -1155,6 +1155,42 @@ export default function App() {
               <div className="flex items-center gap-5"><a href={safeExternalUrl("https://youtube.com/@maxmctavish", "#")} target="_blank" rel="noopener noreferrer" className="bg-white/10 border border-white/10 px-6 py-2.5 rounded-lg font-medium hover:bg-white/20 transition-colors">Visit Channel</a><a href={safeExternalUrl("https://youtube.com/@maxmctavish?sub_confirmation=1", "#")} target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition-transform active:scale-95"><img src="https://iili.io/q3WRHTN.png" alt="Subscribe" className="h-12 shadow-2xl" /></a></div>
             </div>
             
+            <section id="tools" aria-labelledby="tools-heading" className="mb-12">
+              <p className="eyebrow">FREE TOOLS FOR LINE 6 GEAR</p>
+              <h2 id="tools-heading" className="text-4xl font-bold mb-2">Tools &amp; Mods</h2>
+              <p className="text-white/60 mb-6">They run in your browser: nothing to install, and nothing you load is uploaded.</p>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-black/60 border border-white/10 rounded-xl p-6 flex flex-col">
+                  <p className="eyebrow">POD GO · HX EFFECTS</p>
+                  <h3 className="text-3xl font-bold mb-3">NAM A2 Lite</h3>
+                  <p className="text-white/70 mb-5 flex-grow">Neural Amp Modeler captures on your POD Go or HX Effects. Build the firmware in your browser from Line 6&apos;s official file, convert your captures and follow the step-by-step guide.</p>
+                  <div className="neon-actions" style={{ marginTop: 0 }}>
+                    <a className="neon-button primary" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/" target="_blank" rel="noopener noreferrer">Open the setup page <ExternalLink size={16} /></a>
+                    <a className="neon-button" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/converter.html" target="_blank" rel="noopener noreferrer">Converter</a>
+                    <a className="neon-button" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/how-to.html" target="_blank" rel="noopener noreferrer">Guide</a>
+                    <a className="neon-button" href="https://youtu.be/w9rP10gc9I0" target="_blank" rel="noopener noreferrer"><Youtube size={16} /> Video</a>
+                  </div>
+                  <p className="text-xs text-white/40 mt-5">Unofficial and experimental: not made or supported by Line 6. Installing modified firmware is at your own risk.</p>
+                </div>
+                <div className="bg-black/60 border border-white/10 rounded-xl p-6 flex flex-col">
+                  <p className="eyebrow">POD GO · HELIX · HX EFFECTS</p>
+                  <h3 className="text-3xl font-bold mb-3">MORF-X</h3>
+                  <p className="text-white/70 mb-5 flex-grow">Blend a block between five tones on an X-Y pad, live, over USB. Find your tone by moving through it.</p>
+                  <div className="neon-actions" style={{ marginTop: 0 }}>
+                    <a className="neon-button primary" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/morph.html" target="_blank" rel="noopener noreferrer">Open MORF-X <ExternalLink size={16} /></a>
+                  </div>
+                </div>
+                <div className="bg-black/60 border border-white/10 rounded-xl p-6 flex flex-col">
+                  <p className="eyebrow">POD GO</p>
+                  <h3 className="text-3xl font-bold mb-3">POD Go Companion</h3>
+                  <p className="text-white/70 mb-5 flex-grow">Back up and restore your POD Go presets from the browser, including snapshots 5 and 6 with the six-snapshot firmware, plus snapshot names and colours.</p>
+                  <div className="neon-actions" style={{ marginTop: 0 }}>
+                    <a className="neon-button primary" href="https://tavishrox.github.io/pod-go-nam-lite/web/pod-go/companion.html" target="_blank" rel="noopener noreferrer">Open the Companion <ExternalLink size={16} /></a>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {isLoadingVideos && videos.length === 0 ? (
               <div className="bg-black/50 border border-white/10 rounded-2xl p-10 text-center text-white/55">
                 Loading latest uploads...
